@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fast Wiki</title>
+    <!-- 引入基础字体和 KaTeX 样式 (更换为 jsdelivr) -->
+    <link href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/main.css">
+</head>
+<body>
+
+<nav class="vp-nav">
+    <div class="logo">
+        <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linejoin="round" fill="none"/></svg>
+        文档知识库
+    </div>
+    <div class="search-placeholder">Ctrl + K 搜索</div>
+</nav>
+
+<div class="vp-layout">
+    <aside class="vp-sidebar">
+        <!-- 菜单滚动区域 -->
+        <div class="sidebar-menu-container">
+            <nav class="sidebar-menu" id="sidebar-menu"></nav>
+        </div>
+        <!-- 底部版权备案区域 -->
+        <div class="sidebar-footer">
+            &copy; 2026 重庆知无科技有限公司<br>
+            <a href="https://beian.miit.gov.cn/" target="_blank">渝ICP备2023010588号-4</a>
+        </div>
+    </aside>
+
+    <main class="vp-main">
+        <div class="vp-main-inner">
+            <article class="vp-doc" id="content-body">
+                <!-- Markdown 渲染目标区域 -->
+            </article>
+        </div>
+    </main>
+
+    <aside class="vp-aside">
+        <div class="toc-title">本页目录</div>
+        <ul class="toc-menu" id="toc-menu">
+            <!-- TOC 渲染目标区域 -->
+        </ul>
+    </aside>
+</div>
+
+
+
+<!-- ======= 搜索弹窗 UI (默认隐藏) ======= -->
+<div id="search-modal" class="search-modal" style="display: none;">
+    <div class="search-modal-backdrop" id="search-backdrop"></div>
+    <div class="search-modal-content">
+        <div class="search-box">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="search-input" placeholder="搜索文档 (支持全文匹配)..." autocomplete="off">
+            <span class="esc-hint">ESC</span>
+        </div>
+        <ul id="search-results" class="search-results"></ul>
+    </div>
+</div>
+
+
+<!-- 引入核心库 (全部更换为国内更稳定的 jsdelivr npm 源) -->
+<script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.2/dist/markdown-it.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markup-templating.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-php.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-go.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js"></script>
+
+
+<script src="assets/main.js"></script>
+<script>
+    // 初始化 Markdown 解析器
+    const md = window.markdownit({ html: true, linkify: true, typographer: true });
+
+    const DOM = {
+        menu: document.getElementById('sidebar-menu'),
+        content: document.getElementById('content-body'),
+        toc: document.getElementById('toc-menu')
+    };
+
+    window.addEventListener('hashchange', loadContent);
+    initTree().then(() => loadContent());
+</script>
+</body>
+</html>
