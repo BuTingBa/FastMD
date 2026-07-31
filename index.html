@@ -5,12 +5,47 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fast Wiki</title>
-    <link href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="assets/main.css">
+    <!--
+        动态计算项目根路径并写入 <base> 标签。
+        这样无论本项目被部署在网站根目录，还是任意层级的子目录（如 /a/b/wiki/），
+        所有相对路径引用（css/js/fetch）都能基于该 base 正确解析，彻底避免 404。
+        注意：<base> 必须在所有资源引用之前生成，故使用同步 document.write。
+        关键：兼容「访问目录但未带末尾斜杠」的情况（如 /doc 而非 /doc/），
+        否则浏览器会把最后一段当成文件名，导致 base 计算少一层目录。
+    -->
+    <script>
+        (function () {
+            var path = window.location.pathname;
+            var lastSlash = path.lastIndexOf('/');
+            var lastSegment = path.substring(lastSlash + 1);
+            var base;
+            // 最后一段不含点（无扩展名），视为目录访问（如 /doc 或 /a/b/wiki）
+            // 此时 base 应包含该段并补斜杠
+            if (lastSegment && lastSegment.indexOf('.') === -1) {
+                base = path + '/';
+                // 同步修正地址栏，避免后续 hash 路由与相对路径混乱
+                history.replaceState(null, '', base + window.location.search + window.location.hash);
+            } else {
+                // 取最后一个 / 之前的部分（含末尾 /），作为项目根目录
+                base = path.substring(0, lastSlash + 1);
+            }
+            document.write('<base href="' + base + '">');
+        })();
+    </script>
+    <link href="assets/vendor/katex@0.16.9/dist/katex.min.css" rel="stylesheet">
+    <link href="assets/vendor/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="assets/font/iconfont.css">
+    <link rel="stylesheet" href="assets/main.css?v=202607312000">
+    <!-- 内联：隐藏 mermaid 10.x 渲染失败时的错误 SVG（限 svg 元素，避免误伤临时测量 div） -->
+    <style>svg[id^="dmermaid"]{display:none!important}</style>
 </head>
 
 <body>
+
+    <!-- 首次加载进度条：页面可交互后由 JS 淡出移除 -->
+    <div id="app-loader" class="app-loader" aria-hidden="true">
+        <div class="app-loader-track"><div class="app-loader-thumb"></div></div>
+    </div>
 
     <nav class="vp-nav">
         <div class="logo">
@@ -46,20 +81,40 @@
 
         <aside class="vp-sidebar">
             <!-- 一键展开/收缩控制区 -->
-            <div class="sidebar-controls">
+
+            <!-- <div class="sidebar-controls">
                 <button onclick="DOM.toggleAll(true)">展开全部</button>
                 <button onclick="DOM.toggleAll(false)">收起全部</button>
-            </div>
+            </div> -->
 
             <div class="sidebar-menu-container">
                 <nav class="sidebar-menu" id="sidebar-menu"></nav>
             </div>
 
             <div class="sidebar-footer">
-                &copy; 2026 <a href="https://knownil.com/" target="_blank">重庆知无科技有限公司</a><br>
-                <a href="https://beian.miit.gov.cn/" target="_blank">渝ICP备2023010588号-4</a>
+                <div class="sidebar-footer-text">
+                    <!-- &copy; 2026 <a href="https://knownil.com/" target="_blank">重庆知无科技有限公司</a><br>
+                    <a href="https://beian.miit.gov.cn/" target="_blank">渝ICP备2023010588号-4</a> -->
+					
+					&copy; 2026 by <a href="https://github.com/BuTingBa/fastwiki" target="_blank">Fast Wiki</a><br>
+					
+					
+                </div>
+                <div class="sidebar-footer-toggle" id="sidebar-collapse-btn" title="收起菜单">
+                    <span class="knownil icon-fold"></span>
+                </div>
             </div>
+
         </aside>
+
+        <!-- 侧边栏收起后的浮动展开按钮（PC 端） -->
+        <div id="sidebar-float-btn" title="展开菜单">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="6" x2="21" y2="6"></line>
+                <line x1="3" y1="18" x2="21" y2="18"></line>
+            </svg>
+        </div>
 
         <main class="vp-main">
             <div class="vp-main-inner">
@@ -70,11 +125,30 @@
         </main>
 
         <aside class="vp-aside">
-            <div class="toc-title">本页目录</div>
+            <div class="toc-title">
+                <span>本页目录</span>
+                <button class="toc-toggle-btn" id="toc-toggle-btn" title="收起目录" aria-label="收起目录">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="9 18 15 12 9 6"></polyline>
+                    </svg>
+                </button>
+            </div>
             <ul class="toc-menu" id="toc-menu">
                 <!-- TOC 渲染目标区域 -->
             </ul>
         </aside>
+
+        <!-- 目录收起后的浮动展开按钮（PC 端） -->
+        <div id="toc-float-btn" title="展开目录" aria-label="展开目录">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <circle cx="3.5" cy="6" r="1"></circle>
+                <circle cx="3.5" cy="12" r="1"></circle>
+                <circle cx="3.5" cy="18" r="1"></circle>
+            </svg>
+        </div>
     </div>
 
     <!-- ======= 搜索弹窗 UI ======= -->
@@ -93,20 +167,22 @@
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it@13.0.2/dist/markdown-it.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/prism.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-markup-templating.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-php.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-javascript.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-bash.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-json.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-go.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/prismjs@1.29.0/components/prism-python.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/fuse.js@6.6.2/dist/fuse.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/markdown-it-texmath@1.0.0/texmath.min.js"></script>
+    <script src="assets/vendor/markdown-it@13.0.2/dist/markdown-it.min.js"></script>
+    <script src="assets/vendor/prismjs@1.29.0/prism.min.js"></script>
+    <script src="assets/vendor/prismjs@1.29.0/components/prism-markup-templating.min.js"></script>
+    <script src="assets/vendor/prismjs@1.29.0/components/prism-php.min.js"></script>
+    <script src="assets/vendor/prismjs@1.29.0/components/prism-javascript.min.js"></script>
+    <script src="assets/vendor/prismjs@1.29.0/components/prism-bash.min.js"></script>
+    <script src="assets/vendor/prismjs@1.29.0/components/prism-json.min.js"></script>
+    <script src="assets/vendor/prismjs@1.29.0/components/prism-go.min.js"></script>
+    <script src="assets/vendor/prismjs@1.29.0/components/prism-python.min.js"></script>
+    <script src="assets/vendor/fuse.js@6.6.2/dist/fuse.min.js"></script>
+    <script src="assets/vendor/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="assets/vendor/markdown-it-texmath@1.0.0/texmath.min.js"></script>
+    <!-- Mermaid：用于渲染流程图/时序图/类图/甘特图/饼图/状态图等图表 -->
+    <script src="assets/vendor/mermaid@10.9.1/dist/mermaid.min.js"></script>
 
-    <script src="assets/main.js"></script>
+    <script src="assets/main.js?v=202607312000"></script>
     <script>
         const md = window.markdownit({ html: true, linkify: true, typographer: true });
 
@@ -134,9 +210,13 @@
 
         window.addEventListener('hashchange', loadContent);
 
+        // 初始化布局控制（侧边栏自动收起/展开 + 右侧目录手动收起/展开）
+        // 必须在 DOM 对象定义之后调用，因为内部依赖 DOM.sidebar 等引用
+        LayoutCtrl.init();
 
-
-        initTree().then(() => loadContent());
+        initTree().then(() => loadContent()).finally(hideAppLoader);
+        // 兜底：极端情况下（接口超时等）8 秒后强制隐藏进度条，避免页面卡在加载态
+        setTimeout(hideAppLoader, 8000);
     </script>
 </body>
 
