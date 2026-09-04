@@ -20,7 +20,16 @@ if (!is_dir($docsDir)) {
  * 解析文件名，格式支持：标题[路由][排序]
  */
 function parseFileName($filename, $isFile = false) {
-    $nameWithoutExt = $isFile ? pathinfo($filename, PATHINFO_FILENAME) : $filename;
+    // 去扩展名改用字节级 strrpos/substr：pathinfo() 在 Linux + 非 UTF-8 locale 环境
+    // 会错误截断以多字节字符（如中文）开头的文件名，
+    // 例如「支付结果通知[notify][3].md」会被截成「[notify][3]」，导致标题/路由错误
+    $nameWithoutExt = $filename;
+    if ($isFile) {
+        $dot = strrpos($filename, '.');
+        if ($dot !== false) {
+            $nameWithoutExt = substr($filename, 0, $dot);
+        }
+    }
 
     // 正则提取 标题[路由][排序]
     if (preg_match('/^([^\[\]]+)(?:\[([^\[\]]+)\])?(?:\[(\d+)\])?$/', $nameWithoutExt, $matches)) {
@@ -50,8 +59,11 @@ function scanDocs($dir, $parentRoute = '', $parentPath = '') {
         $currentPath = $parentPath ? $parentPath . '/' . $item : $item;
         $isFile = is_file($path);
 
-        // 如果是文件且不是 markdown 则跳过
-        if ($isFile && pathinfo($item, PATHINFO_EXTENSION) !== 'md') continue;
+        // 如果是文件且不是 markdown 则跳过（字节级取扩展名，规避 pathinfo 的 locale 缺陷）
+        if ($isFile) {
+            $extDot = strrpos($item, '.');
+            if ($extDot === false || substr($item, $extDot + 1) !== 'md') continue;
+        }
 
         list($title, $route, $sort) = parseFileName($item, $isFile);
         $fullRoute = $parentRoute ? $parentRoute . '/' . $route : $route;
