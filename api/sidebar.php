@@ -1,6 +1,20 @@
 <?php
-// api/sidebar.php
+// api/sidebar.php（兼容 PHP 7.2 ~ 8.4）
 header('Content-Type: application/json; charset=utf-8');
+
+// str_starts_with() 是 PHP 8.0+ 新增函数，低版本会 Fatal error。
+// 此处做版本兜底，语义与 PHP 8 原生完全一致：
+//  - 字节级前缀比较（strncmp 二进制安全，UTF-8 多字节字符无影响）
+//  - 空前缀返回 true（与原生行为一致）
+if (!function_exists('str_starts_with')) {
+    function str_starts_with($haystack, $needle) {
+        $needle = (string) $needle;
+        if ($needle === '') {
+            return true;
+        }
+        return strncmp((string) $haystack, $needle, strlen($needle)) === 0;
+    }
+}
 
 $docsDir = dirname(__DIR__) . '/docs';
 
@@ -37,7 +51,7 @@ function scanDocs($dir, $parentRoute = '', $parentPath = '') {
     
     foreach ($items as $item) {
         // 忽略隐藏文件 (.开头) 或要求忽略的辅助文档 (_开头)
-        if ($item === '.' || $item === '..' || str_starts_with($item, '.') || str_starts_with($item, '_')) continue;
+        if ($item === '.' || $item === '..' || $item[0] === '.' || $item[0] === '_') continue;
         
         $path = $dir . '/' . $item;
         $currentPath = $parentPath ? $parentPath . '/' . $item : $item;

@@ -2,6 +2,27 @@
 
 > 最新改动追加在最前面。
 
+## v1.4.5.202609042210
+
+### 修复
+- **PHP 7.2 ~ 8.4 全兼容**：`api/sidebar.php`、`api/search.php` 使用了 PHP 8.0+ 才有的 `str_starts_with()`，在 PHP < 8.0 环境直接 Fatal error（如 `Call to undefined function str_starts_with()`）。现加入 `function_exists` 兜底 polyfill：
+  - 用 `strncmp()` 做字节级前缀比较，二进制安全，UTF-8 多字节字符无影响，语义与 PHP 8 原生完全一致（含空前缀返回 true 的行为）
+  - 已用 10 组用例（多字节/空前缀/needle 更长/空 haystack/业务用例）比对原生函数，结果 10/10 一致
+- `api/search.php` 增加 `mb_substr` 降级：mbstring 扩展未启用时按字节截断，避免 Fatal error。
+
+### 新增
+- `api/sidebar_php56.php` / `api/search_php56.php`：**PHP 5.6 独立兼容版**，与默认版功能完全一致：
+  - 不使用 `str_starts_with()`（直接用 `strncmp` 字节级前缀比较替代）
+  - 不依赖 mbstring 扩展（`mb_substr` 自动降级为 `substr`）
+  - 不使用任何 PHP 7+ 语法特性
+  - 部署方式：PHP 5.6 环境下将文件重命名为 `sidebar.php` / `search.php`（或修改前端请求地址）
+
+### 改动文件
+- `api/sidebar.php` — 加 `str_starts_with` polyfill（默认版本，PHP 7.2 ~ 8.4）
+- `api/search.php` — 加 `str_starts_with` polyfill + `mb_substr` 降级
+- `api/sidebar_php56.php` — 新增（PHP 5.6 兼容版目录接口）
+- `api/search_php56.php` — 新增（PHP 5.6 兼容版搜索接口）
+
 ## v1.4.4.202607311600
 
 ### 新增
