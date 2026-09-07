@@ -35,7 +35,7 @@
     <link href="assets/vendor/katex@0.16.9/dist/katex.min.css" rel="stylesheet">
     <link href="assets/vendor/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/font/iconfont.css">
-    <link rel="stylesheet" href="assets/main.css?v=202607312000">
+    <link rel="stylesheet" href="assets/main.css?v=202609080214">
     <!-- 内联：隐藏 mermaid 10.x 渲染失败时的错误 SVG（限 svg 元素，避免误伤临时测量 div） -->
     <style>svg[id^="dmermaid"]{display:none!important}</style>
 </head>
@@ -179,6 +179,8 @@
     <script src="assets/vendor/fuse.js@6.6.2/dist/fuse.min.js"></script>
     <script src="assets/vendor/katex@0.16.9/dist/katex.min.js"></script>
     <script src="assets/vendor/markdown-it-texmath@1.0.0/texmath.min.js"></script>
+    <!-- markdown-it-container：支持 Vitepress 风格容器块 ::: tip/info/warning/danger -->
+    <script src="assets/vendor/markdown-it-container@3.0.0/dist/markdown-it-container.min.js"></script>
     <!-- Mermaid：用于渲染流程图/时序图/类图/甘特图/饼图/状态图等图表 -->
     <script src="assets/vendor/mermaid@10.9.1/dist/mermaid.min.js"></script>
 
@@ -192,6 +194,26 @@
             delimiters: 'dollars', // 识别 $ 行内公式 和 $$ 块级公式
             katexOptions: { macros: { "\\RR": "\\mathbb{R}" } } // 可选：支持部分自定义宏
         });
+
+        // Vitepress 风格容器块：::: tip / info / warning / danger [可选自定义标题]
+        // 例：::: warning 注意 \n 内容 \n :::  →  彩色提示框
+        (function () {
+            var defaultTitles = { tip: '提示', info: '信息', warning: '注意', danger: '警告' };
+            ['tip', 'info', 'warning', 'danger'].forEach(function (name) {
+                md.use(window.markdownitContainer, name, {
+                    render: function (tokens, idx) {
+                        if (tokens[idx].nesting === 1) {
+                            // 容器名后的剩余文本作为自定义标题，没有则用默认标题
+                            var m = tokens[idx].info.trim().match(/^\S+\s+(.*)$/);
+                            var title = (m && m[1]) ? m[1] : defaultTitles[name];
+                            return '<div class="custom-block ' + name + '"><p class="custom-block-title">' +
+                                md.utils.escapeHtml(title) + '</p>\n';
+                        }
+                        return '</div>\n';
+                    }
+                });
+            });
+        })();
 
         // DOM 映射
         const DOM = {

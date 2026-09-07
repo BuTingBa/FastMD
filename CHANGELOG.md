@@ -2,6 +2,22 @@
 
 > 最新改动追加在最前面。
 
+## v1.4.7.202609080214
+
+### 新增
+- **VitePress 风格容器块**：支持 `::: tip / info / warning / danger` 语法渲染彩色提示框（此前为 markdown-it 不识别的扩展语法，整段被当普通文字输出）。
+  - 引入 `markdown-it-container@3.0.0`（本地 vendor，离线可用），在 index.html 内联脚本注册 4 种容器
+  - 支持自定义标题：`::: warning 高危操作`；无标题时用默认标题（提示/信息/注意/警告）
+  - 样式：4px 彩色左边框 + 8px 圆角 + 同色系浅色底（绿/蓝/橙/红），info 跟随品牌色变量自动适配深色模式
+  - 容器内支持任意行内 markdown 语法（加粗、行内代码等）
+- `docs/渲染示例[render][4].md` 新增「容器块」演示章节
+
+### 改动文件
+- `index.html` — 引入 markdown-it-container 脚本；内联注册 4 种容器；main.css 版本号 → `?v=202609080214`
+- `assets/main.css` — 新增 `.custom-block` 系列（tip/info/warning/danger）样式
+- `assets/vendor/markdown-it-container@3.0.0/` — 新增本地插件
+- `docs/渲染示例[render][4].md` — 容器块演示
+
 ## v1.4.6.202609042219
 
 ### 修复
