@@ -2,6 +2,23 @@
 
 > 最新改动追加在最前面。
 
+## v1.5.1.202609081423
+
+### 改动
+- **路由协议改为路径式**：后端接口由 `?action=xxx` 查询参数改为 `/action/sidebar`、`/action/search` 路径区分路由，后端代码可直接按 URL 路径分发（PHP 经 `PATH_INFO` 获取，Node/Python 解析请求路径），`/action/*` 之外的路径可照常按静态文件处理：
+  - `config.js` — `apiUrl()` 改拼 `{apiEndpoint}/action/xxx`；新增 `fetchApi()`：路径式优先，404/网络错误自动回退旧协议 `?action=xxx`（兼容不支持 PATH_INFO 的 nginx 配置与预编译静态 JSON 方案）
+  - `api/main.php` — 路由解析支持 `PATH_INFO` 路径式 + `?action=` 查询参数式双协议
+  - `api/main.js` / `api/main.py` — 同步双协议路由；非 `/action/*` 路径回退为静态文件服务（根目录 = 项目根），一条命令即可**独立托管整站**，api 目录下文件也能以目录方式直接访问（含路径穿越防护、CORS）
+
+### 修复
+- **搜索弹窗「索引加载失败」**：`assets/main.js` 的 `SearchSys` 仍请求已删除的旧接口 `api/search.php`，改为 `fetchApi('search')`（合并接口时的遗漏）
+
+### 文档
+- `docs/配置与服务[config][7].md` — 协议章节改写为路径式路由 + 旧协议兼容说明、Node/Python 独立托管整站用法、静态 JSON 回退机制
+- `README.md` — 部署方式突出 Node/Python 一条命令托管整站
+- `docs/开发说明[dev][6].md` — 接口引用与正则位置（sidebar.php → main.php）更新
+- `docs/渲染示例[render][4].md` — 时序图接口地址更新
+
 ## v1.5.0.202609081327
 
 ### 架构重构：配置外置 + 后端接口统一 + 多语言后端

@@ -33,9 +33,9 @@
 ## 部署方式
 
 * **PHP 主机（默认）**：上传即用，`config.js` 保持默认 `api/main.php`。兼容 PHP 5.6 ~ 8.4，宝塔/虚拟主机均可。
-* **Node.js**：`node api/main.js` 启动接口服务（零依赖），`config.js` 的 `apiEndpoint` 改为 `http://127.0.0.1:8300/`（可用 nginx 反代到正式域名）。
-* **Python**：`python api/main.py` 启动接口服务（标准库，零依赖），配置方式同上。
-* **任意语言自实现**：后端只需实现 `?action=sidebar` / `?action=search` 两个 JSON 接口，协议详见 [配置与服务接口文档](docs/配置与服务[config][7].md)。也支持预编译静态 JSON 方案。
+* **Node.js 一条命令托管整站**：`node api/main.js` 即可同时提供页面、静态资源与 API（`/action/*` 走接口，其余路径按静态文件处理），浏览器直接访问 `http://127.0.0.1:8300/`。也可仅当接口服务，`apiEndpoint` 改为 `http://127.0.0.1:8300/`（可用 nginx 反代到正式域名）。
+* **Python 同上**：`python api/main.py`（标准库，零依赖），独立托管 / 仅当接口均可。
+* **任意语言自实现**：后端只需实现 `GET /action/sidebar`、`GET /action/search` 两个 JSON 接口（旧版 `?action=` 查询参数式同样兼容），协议详见 [配置与服务接口文档](docs/配置与服务[config][7].md)。也支持预编译静态 JSON 方案。
 * 任意层级子目录部署（如 `/wiki/`）无需额外配置，相对路径自动适配。
 
 ## 项目结构

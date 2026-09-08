@@ -1,9 +1,11 @@
 <?php
 // api/main.php —— FastMD 统一后端入口（PHP 5.6 ~ 8.4 单文件兼容版）
-// 由 sidebar.php + search.php 合并而来，通过 ?action= 参数区分功能：
-//   GET api/main.php?action=sidebar → 目录树 JSON：{"data": [...]}
-//   GET api/main.php?action=search  → 搜索索引 JSON：[{...}, ...]
-// 不带 action 参数时默认返回 sidebar，方便浏览器直接访问调试。
+// 由 sidebar.php + search.php 合并而来，路由方式（两种均支持，路径式为推荐协议）：
+//   GET api/main.php/action/sidebar → 目录树 JSON：{"data": [...]}（路径式，PATH_INFO）
+//   GET api/main.php/action/search  → 搜索索引 JSON：[{...}, ...]
+//   GET api/main.php?action=sidebar / ?action=search（旧查询参数式，向后兼容）
+// 不带 action 时默认返回 sidebar，方便浏览器直接访问调试。
+// api 目录下的其它文件（静态资源等）由 Web 服务器直接提供，不经本脚本。
 //
 // 兼容性说明：
 //  - str_starts_with() 是 PHP 8.0+ 函数，此处 polyfill，PHP 5.6/7.x 可用
@@ -166,7 +168,19 @@ function buildSearchIndex($dir, $parentRoute = '') {
 
 // ============================ 路由分发 ============================
 
-$action = isset($_GET['action']) ? $_GET['action'] : 'sidebar';
+// 路由解析（优先级：?action= 查询参数 > PATH_INFO 路径 > 默认 sidebar）：
+//   ?action=search           → search（旧协议，向后兼容）
+//   /action/search（PATH_INFO）→ search（新协议，路径式路由）
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+if ($action === '' && isset($_SERVER['PATH_INFO'])) {
+    $action = trim($_SERVER['PATH_INFO'], '/');
+    if (str_starts_with($action, 'action/')) {
+        $action = substr($action, strlen('action/'));
+    }
+}
+if ($action === '') {
+    $action = 'sidebar';
+}
 
 if (!is_dir($docsDir)) {
     // 无 docs 目录：sidebar 返回空树，search 返回空索引

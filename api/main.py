@@ -2,29 +2,37 @@
 # -*- coding: utf-8 -*-
 """
 api/main.py —— FastMD 统一后端入口（Python 3 标准库实现，零依赖）
-与 api/main.php 协议完全一致：
-  GET ?action=sidebar -> 目录树 JSON：{"data": [...]}
-  GET ?action=search  -> 搜索索引 JSON：[{...}, ...]
+与 api/main.php 协议完全一致（路径式路由为推荐协议，旧查询参数式向后兼容）：
+  GET /action/sidebar -> 目录树 JSON：{"data": [...]}
+  GET /action/search  -> 搜索索引 JSON：[{...}, ...]
+  GET ?action=sidebar / ?action=search（旧协议，同样支持）
+
+除 API 路由外的其它路径一律按静态文件处理（根目录为项目根），
+因此本服务可独立托管整站：api 目录下的文件也能以目录方式直接访问。
 
 启动方式：
-  python api/main.py            # 默认监听 127.0.0.1:8300
+  python api/main.py            # 默认监听 127.0.0.1:8300，可直接当整站服务器
   PORT=9000 python api/main.py  # 自定义端口（Windows: set PORT=9000）
 
-与前端联调：
-  将 config.js 的 apiEndpoint 改为 "http://127.0.0.1:8300/" 即可
-  （本服务已开启 CORS，允许跨域调用）
+与前端联调（两种用法）：
+  1. 独立整站：浏览器直接访问 http://127.0.0.1:8300/ ，config.js 无需修改
+  2. 仅当接口：将 config.js 的 apiEndpoint 改为 "http://127.0.0.1:8300/"
+     （本服务已开启 CORS，允许跨域调用）
 """
 
 import json
 import os
 import re
 import sys
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
 PORT = int(os.environ.get('PORT', '8300'))
 HOST = os.environ.get('HOST', '127.0.0.1')
-DOCS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, 'docs')
+# 静态服务根目录 = 项目根（api 的上一级）
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+DOCS_DIR = os.path.join(ROOT_DIR, 'docs')
 
 # ============================ 公共函数 ============================
 
@@ -152,35 +160,56 @@ def build_search_index(dir_path, parent_route=''):
 # ============================ HTTP 服务 ============================
 
 
-class Handler(BaseHTTPRequestHandler):
+class Handler(SimpleHTTPRequestHandler):
+    """API 路由 + 静态文件服务（静态部分复用标准库，根目录 = 项目根）"""
 
     def do_GET(self):
-        # 统一 CORS，便于前端跨域联调
+        parsed = urlparse(self.path)
+
+        # 路由解析（优先级：?action= 查询参数 > /action/xxx 路径 > 静态文件）
+        query_action = (parse_qs(parsed.query).get('action') or [''])[0]
+        if query_action:
+            return self.send_api(query_action)
+
+        segments = [s for s in parsed.path.split('/') if s]
+        if segments and segments[0] == 'action' and len(segments) > 1:
+            return self.send_api(segments[1])
+
+        super().do_GET()
+
+    def send_api(self, action):
+        """按 action 名输出对应 API 数据（CORS 头由 end_headers 统一添加）"""
+        if action == 'search':
+            payload = build_search_index(DOCS_DIR) if os.path.isdir(DOCS_DIR) else []
+        elif action == 'sidebar':
+            payload = {'data': scan_docs(DOCS_DIR)} if os.path.isdir(DOCS_DIR) else {'data': []}
+        else:
+            self.send_response(404)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(json.dumps(
+                {'error': 'unknown action: %s' % action}, ensure_ascii=False).encode('utf-8'))
+            return
+
         self.send_response(200)
-        self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.end_headers()
-
-        query = parse_qs(urlparse(self.path).query)
-        action = (query.get('action') or ['sidebar'])[0]
-
-        if not os.path.isdir(DOCS_DIR):
-            payload = [] if action == 'search' else {'data': []}
-        elif action == 'search':
-            payload = build_search_index(DOCS_DIR)
-        else:
-            payload = {'data': scan_docs(DOCS_DIR)}
-
         self.wfile.write(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+
+    def end_headers(self):
+        # 统一 CORS，便于前端跨域联调（静态响应也带上）
+        self.send_header('Access-Control-Allow-Origin', '*')
+        super().end_headers()
 
     def log_message(self, fmt, *args):
         sys.stderr.write('[FastMD] %s\n' % (fmt % args))
 
 
 def main():
-    server = ThreadingHTTPServer((HOST, PORT), Handler)
+    server = ThreadingHTTPServer((HOST, PORT), partial(Handler, directory=ROOT_DIR))
     print('FastMD Python backend listening at http://%s:%s/' % (HOST, PORT))
-    print('docs dir: %s' % os.path.abspath(DOCS_DIR))
+    print('docs dir: %s' % DOCS_DIR)
+    print('API routes: /action/sidebar, /action/search (legacy: ?action=...)')
     try:
         server.serve_forever()
     except KeyboardInterrupt:

@@ -1,8 +1,8 @@
 window.routeMap = {};
 window.firstRoute = null;
 
-// 注：SITE_TITLE / apiUrl 等全局定义在根目录 config.js 中（先于本文件加载），
-// 此处直接使用：apiUrl('sidebar' | 'search')、SITE_TITLE
+// 注：SITE_TITLE / fetchApi 等全局定义在根目录 config.js 中（先于本文件加载），
+// 此处直接使用：fetchApi('sidebar' | 'search')、SITE_TITLE
 
 // ================= 0. 首次加载进度条控制 =================
 // 侧边栏与首篇文档渲染完成后淡出移除；8 秒兜底防止意外卡死
@@ -16,7 +16,7 @@ function hideAppLoader() {
 // ================= 1. 拉取并渲染菜单结构 =================
 async function initTree() {
     try {
-        const res = await fetch(apiUrl('sidebar'));
+        const res = await fetchApi('sidebar');
         const { data } = await res.json();
         DOM.menu.innerHTML = renderSidebar(data);
         initSidebarResizer();
@@ -626,7 +626,7 @@ const SearchSys = {
         if (!this.isDataLoaded) {
             this.resultsArea.innerHTML = '<li style="padding: 16px; text-align: center; color: var(--vp-c-text-3);">正在建立本地索引...</li>';
             try {
-                const res = await fetch('api/search.php');
+                const res = await fetchApi('search');
                 const rawData = await res.json();
                 
                 this.fuse = new Fuse(rawData, {

@@ -28,8 +28,9 @@ window.FASTMD_CONFIG = {
      *    Access-Control-Allow-Origin: *
      *
      * ── 接口协议（自定义后端语言只需实现两个 action）──────────────
-     * GET {apiEndpoint}?action=sidebar → 返回目录树 JSON：{ "data": [...] }
-     * GET {apiEndpoint}?action=search  → 返回搜索索引 JSON：[ {...}, ... ]
+     * GET {apiEndpoint}/action/sidebar → 返回目录树 JSON：{ "data": [...] }
+     * GET {apiEndpoint}/action/search  → 返回搜索索引 JSON：[ {...}, ... ]
+     * 兼容旧协议：{apiEndpoint}?action=sidebar / ?action=search（后端两种都支持）
      * 详细字段说明见 docs/ 配置与服务 文档。
      */
     apiEndpoint: "api/main.php"
@@ -49,9 +50,29 @@ window.SITE_TITLE = window.FASTMD_CONFIG.siteTitle || 'FastMD';
 window.API_ENDPOINT = window.FASTMD_CONFIG.apiEndpoint || 'api/main.php';
 
 /**
- * 拼接后端接口地址：apiEndpoint + ?action=xxx
- * 兼容 apiEndpoint 自身已带查询参数（如 "http://host/main?token=1"）的情况
+ * 拼接后端接口地址：apiEndpoint + /action/xxx（路径式路由）
+ * - 自动去掉末尾斜杠："http://host:8300/" → "http://host:8300/action/xxx"
+ * - 接口地址自带查询参数时（如 "http://host/main?token=1"），
+ *   路径已不可追加，退回旧协议 ?action=xxx 追加方式
  */
 window.apiUrl = function (action) {
-    return window.API_ENDPOINT + (window.API_ENDPOINT.indexOf('?') !== -1 ? '&' : '?') + 'action=' + action;
+    var ep = window.API_ENDPOINT;
+    if (ep.indexOf('?') !== -1) {
+        return ep + '&action=' + action;
+    }
+    return ep.replace(/\/+$/, '') + '/action/' + action;
+};
+
+/**
+ * 发起后端 API 请求：路径式路由（/action/xxx）优先，
+ * 失败（404/网络错误）时自动回退旧协议（?action=xxx）。
+ * 兼容不支持 PATH_INFO 的服务器（如部分 nginx 配置）
+ * 与预编译静态 JSON 方案（静态服务器会忽略查询字符串）。
+ */
+window.fetchApi = async function (action) {
+    try {
+        const res = await fetch(window.apiUrl(action));
+        if (res.ok) return res;
+    } catch (e) { /* 落入下方旧协议重试 */ }
+    return fetch(window.API_ENDPOINT + (window.API_ENDPOINT.indexOf('?') !== -1 ? '&' : '?') + 'action=' + action);
 };

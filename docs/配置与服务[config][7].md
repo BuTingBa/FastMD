@@ -47,9 +47,19 @@ apiEndpoint: "http://127.0.0.1:8300/"
 
 ## 后端接口协议
 
-自定义后端只需实现两个 GET 接口（共用一个入口，用 `action` 参数区分）：
+自定义后端只需实现两个 GET 接口（共用一个入口，用**路径**区分路由）：
 
-### 1. 目录树：`GET {apiEndpoint}?action=sidebar`
+- `GET {apiEndpoint}/action/sidebar` —— 目录树
+- `GET {apiEndpoint}/action/search` —— 搜索索引
+
+::: info 旧协议兼容
+v1.5.0 起推荐路径式路由（`/action/xxx`），后端同时兼容旧的查询参数式（`?action=xxx`）。
+三种官方实现两种方式都支持，自定义后端至少实现其中一种即可。
+:::
+
+采用路径式路由的好处：后端可按 URL 路径统一分发（PHP 通过 `PATH_INFO` 获取，Node/Python 直接解析请求路径），`/action/*` 之外的路径还可以照常按静态文件处理——Node.js / Python 官方实现正是这样做的，因此它们能直接独立托管整站。
+
+### 1. 目录树：`GET {apiEndpoint}/action/sidebar`
 
 返回菜单层级 JSON：
 
@@ -85,7 +95,7 @@ apiEndpoint: "http://127.0.0.1:8300/"
 | `sortWeight` | 排序权重；未显式指定排序时使用文件修改时间 |
 | `children` | 子级数组（仅 `dir` 类型） |
 
-### 2. 搜索索引：`GET {apiEndpoint}?action=search`
+### 2. 搜索索引：`GET {apiEndpoint}/action/search`
 
 返回全文检索索引 JSON 数组：
 
@@ -119,11 +129,19 @@ apiEndpoint: "http://127.0.0.1:8300/"
 
 三种实现协议完全一致（Node/Python 版已内置 CORS 头，可直接跨域联调）。
 
+::: tip Node / Python 版可独立托管整站
+除 `/action/*` 路由外的请求会按静态文件处理（根目录为项目根），
+因此 `node api/main.js` / `python api/main.py` 一条命令即可同时提供页面、
+静态资源与 API，浏览器直接访问 `http://127.0.0.1:8300/` 就能使用，无需再配 Web 服务器。
+:::
+
 ::: tip 切换后端三步走
 1. 启动目标后端（如 `node api/main.js`）
 2. 修改 `config.js`：`apiEndpoint: "http://127.0.0.1:8300/"`
 3. 刷新浏览器
-::
+
+若只用 Node/Python 版独立托管整站（页面与接口同源），`apiEndpoint` 保持默认相对路径也可以。
+:::
 
 ## 用其它语言实现（Go / Java / Rust ...）
 
@@ -135,6 +153,6 @@ apiEndpoint: "http://127.0.0.1:8300/"
 4. **输出 JSON**：`Content-Type: application/json; charset=utf-8`，UTF-8 编码输出
 5. **跨域**（可选）：若与页面不同源，返回 `Access-Control-Allow-Origin: *`
 
-也可以不走动态服务：写一个编译器把目录树/索引预编译成静态 JSON 文件，把 `apiEndpoint` 指向该静态文件并带上 `?action=` 可被忽略的查询参数即可（前提是你的静态服务器忽略查询字符串）。
+也可以不走动态服务：写一个编译器把目录树/索引预编译成静态 JSON 文件，把 `apiEndpoint` 指向该静态文件即可。前端会先请求路径式地址，静态服务器返回 404 后自动回退到带 `?action=` 查询参数的旧协议地址（静态服务器会忽略查询字符串），无需额外配置。
 
 继续阅读 [开发说明](#/dev)。
