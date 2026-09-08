@@ -1,13 +1,13 @@
 # 配置与服务接口
 
-FastMD 的所有可配置项集中在一个文件：根目录 `config.js`。修改后刷新浏览器即可生效，无需重启服务。本文同时说明后端接口协议，以及如何用任意编程语言替换默认的 PHP 后端。
+FastMD 的所有可配置项集中在一个文件：根目录 `config.js`。修改后刷新浏览器即可生效，无需重启服务。本文同时说明后端接口协议、静态 JSON 方案，以及如何用任意编程语言替换默认的 PHP 后端。
 
 ## config.js 配置说明
 
 ```javascript
 window.FASTMD_CONFIG = {
-    siteTitle: "FastMD",          // 网站标题
-    apiEndpoint: "api/main.php"   // 后端服务接口地址
+    siteTitle: "FastMD",     // 网站标题
+    apiEndpoint: "api/php"   // 后端服务接口地址
 };
 ```
 
@@ -23,12 +23,17 @@ window.FASTMD_CONFIG = {
 相对于**项目根目录**（index.html 会自动写入 `<base>` 标签，无论部署在哪都能正确解析）：
 
 ```javascript
-apiEndpoint: "api/main.php"   // 默认 PHP 实现
-apiEndpoint: "api/main.py"    // 换成 Python 实现（需自行部署服务）
-apiEndpoint: "api/main.js"    // 换成 Node.js 实现（需自行部署服务）
+apiEndpoint: "api/php"   // 默认 PHP 实现（api/php/index.php，目录默认入口）
+apiEndpoint: "api/file"  // 静态 JSON 方案（无需任何后端语言，纯静态主机可运行）
 ```
 
-**二级目录部署**：项目部署在子目录（如 `https://example.com/wiki/`）时，相对路径依然有效——`<base>` 已指向 `/wiki/`，请求会发往 `https://example.com/wiki/api/main.php`，无需任何额外配置。
+Node.js / Python 独立服务用绝对地址：
+
+```javascript
+apiEndpoint: "http://127.0.0.1:8300"
+```
+
+**二级目录部署**：项目部署在子目录（如 `https://example.com/wiki/`）时，相对路径依然有效——`<base>` 已指向 `/wiki/`，请求会发往 `https://example.com/wiki/api/php/sidebar`，无需任何额外配置。
 
 ### 绝对路径
 
@@ -36,7 +41,7 @@ apiEndpoint: "api/main.js"    // 换成 Node.js 实现（需自行部署服务�
 
 ```javascript
 apiEndpoint: "https://api.example.com/main"
-apiEndpoint: "http://127.0.0.1:8300/"
+apiEndpoint: "http://127.0.0.1:8300"
 ```
 
 ::: warning 跨域须知
@@ -47,19 +52,19 @@ apiEndpoint: "http://127.0.0.1:8300/"
 
 ## 后端接口协议
 
-自定义后端只需实现两个 GET 接口（共用一个入口，用**路径**区分路由）：
+自定义后端只需实现两个 GET 路由（直接以路径区分，无任何参数约定）：
 
-- `GET {apiEndpoint}/action/sidebar` —— 目录树
-- `GET {apiEndpoint}/action/search` —— 搜索索引
+- `GET {apiEndpoint}/sidebar` —— 目录树
+- `GET {apiEndpoint}/search` —— 搜索索引
 
-::: info 旧协议兼容
-v1.5.0 起推荐路径式路由（`/action/xxx`），后端同时兼容旧的查询参数式（`?action=xxx`）。
-三种官方实现两种方式都支持，自定义后端至少实现其中一种即可。
+::: info 查询参数兼容
+前端路径式请求失败（404 / 网络错误）时会自动回退到查询参数方式 `{apiEndpoint}?action=sidebar|search` 重试。
+三种动态后端实现两种方式都支持；自定义后端只需实现路径式一种即可。
 :::
 
-采用路径式路由的好处：后端可按 URL 路径统一分发（PHP 通过 `PATH_INFO` 获取，Node/Python 直接解析请求路径），`/action/*` 之外的路径还可以照常按静态文件处理——Node.js / Python 官方实现正是这样做的，因此它们能直接独立托管整站。
+采用纯路径式路由的好处：后端可按 URL 路径统一分发（PHP 通过 `PATH_INFO` 获取，Node/Python 直接解析请求路径），路径也可以直接命中静态文件——`api/file/` 静态方案与 Node/Python 的「独立托管整站」正是基于此实现。
 
-### 1. 目录树：`GET {apiEndpoint}/action/sidebar`
+### 1. 目录树：`GET {apiEndpoint}/sidebar`
 
 返回菜单层级 JSON：
 
@@ -95,7 +100,7 @@ v1.5.0 起推荐路径式路由（`/action/xxx`），后端同时兼容旧的查
 | `sortWeight` | 排序权重；未显式指定排序时使用文件修改时间 |
 | `children` | 子级数组（仅 `dir` 类型） |
 
-### 2. 搜索索引：`GET {apiEndpoint}/action/search`
+### 2. 搜索索引：`GET {apiEndpoint}/search`
 
 返回全文检索索引 JSON 数组：
 
@@ -119,25 +124,54 @@ v1.5.0 起推荐路径式路由（`/action/xxx`），后端同时兼容旧的查
 - 文件命名规范：`标题[路由][排序].md`，目录为 `标题[路由][排序]`，详见 [命名规则](#/naming)
 - 同级按 `sortWeight` 升序排列
 
-## 官方三种后端实现
+## 官方四种接口实现
 
-| 文件 | 语言 | 运行方式 |
+api 目录按语言分目录组织，每个目录以 `index` 作为默认入口，一眼即可分辨实现语言：
+
+| 目录 | 类型 | 运行方式 |
 |---|---|---|
-| `api/main.php` | PHP 5.6 ~ 8.4 | 任意 PHP 虚拟主机 / `php -S` 内置服务器，零配置 |
-| `api/main.js` | Node.js（零依赖） | `node api/main.js`，默认监听 `127.0.0.1:8300`，`PORT` 环境变量改端口 |
-| `api/main.py` | Python 3 标准库 | `python api/main.py`，默认监听 `127.0.0.1:8300`，`PORT` 环境变量改端口 |
+| `api/php/` | PHP 5.6 ~ 8.4 | 任意 PHP 虚拟主机 / `php -S` 内置服务器，零配置 |
+| `api/nodejs/` | Node.js（零依赖） | `node api/nodejs/index.js`，默认监听 `127.0.0.1:8300`，`PORT` 环境变量改端口 |
+| `api/python/` | Python 3 标准库 | `python api/python/index.py`，默认监听 `127.0.0.1:8300`，`PORT` 环境变量改端口 |
+| `api/file/` | 静态 JSON | 无需后端语言，任何静态服务器（nginx / GitHub Pages / 对象存储）直接托管 |
 
-三种实现协议完全一致（Node/Python 版已内置 CORS 头，可直接跨域联调）。
+三种动态实现协议完全一致（Node/Python 版已内置 CORS 头，可直接跨域联调）。
 
-::: tip Node / Python 版可独立托管整站
-除 `/action/*` 路由外的请求会按静态文件处理（根目录为项目根），
-因此 `node api/main.js` / `python api/main.py` 一条命令即可同时提供页面、
-静态资源与 API，浏览器直接访问 `http://127.0.0.1:8300/` 就能使用，无需再配 Web 服务器。
-:::
+### PHP 目录入口说明
+
+`apiEndpoint: "api/php"` 时，`/sidebar`、`/search` 路径需由服务器回退到 `api/php/index.php` 并通过 `PATH_INFO` 分发：
+
+- **Apache**：已内置 `api/php/.htaccess`（`FallbackResource index.php`），上传即用
+- **nginx**：加一条 `location /api/php/ { try_files $uri $uri/ /api/php/index.php?$query_string; }`
+- **未配置回退的服务器**（如 `php -S`）：前端会自动回退到 `?action=` 查询参数方式，同样可用
+
+### Node / Python 版可独立托管整站
+
+除 `/sidebar`、`/search` 路由外的请求会按静态文件处理（根目录为项目根），因此一条命令即可同时提供页面、静态资源与 API，浏览器直接访问 `http://127.0.0.1:8300/` 就能使用，无需再配 Web 服务器。
+
+### 静态 JSON 方案（api/file/）
+
+不想部署任何后端语言？`api/file/` 下放两个预渲染好的 JSON 文件即可：
+
+```text
+api/file/sidebar   # 目录树 JSON（同 GET /sidebar 的返回结构）
+api/file/search    # 搜索索引 JSON（同 GET /search 的返回结构）
+```
+
+把 `config.js` 的 `apiEndpoint` 改为 `"api/file"`，前端请求 `api/file/sidebar`、`api/file/search` 时会被静态服务器直接命中文件——整个站点变成纯静态站点，可部署到 GitHub Pages、对象存储等任何静态托管。
+
+仓库内已附带一份基于当前 `docs/` 生成的演示数据。文档更新后重新生成：
+
+```bash
+# 用任一官方后端导出（以 PHP 为例）
+php -S 127.0.0.1:8302
+curl http://127.0.0.1:8302/api/php/index.php?action=sidebar > api/file/sidebar
+curl http://127.0.0.1:8302/api/php/index.php?action=search  > api/file/search
+```
 
 ::: tip 切换后端三步走
-1. 启动目标后端（如 `node api/main.js`）
-2. 修改 `config.js`：`apiEndpoint: "http://127.0.0.1:8300/"`
+1. 启动目标后端（如 `node api/nodejs/index.js`）
+2. 修改 `config.js`：`apiEndpoint: "http://127.0.0.1:8300"`
 3. 刷新浏览器
 
 若只用 Node/Python 版独立托管整站（页面与接口同源），`apiEndpoint` 保持默认相对路径也可以。
@@ -145,7 +179,7 @@ v1.5.0 起推荐路径式路由（`/action/xxx`），后端同时兼容旧的查
 
 ## 用其它语言实现（Go / Java / Rust ...）
 
-只需实现上文的两个 action、返回相同结构的 JSON 即可。参考要点：
+只需实现 `/sidebar`、`/search` 两个路由、返回相同结构的 JSON 即可。参考要点：
 
 1. **读取目录**：递归扫描 `docs/`，按上文扫描规则过滤
 2. **解析文件名**：用正则 `^([^[\]]+)(?:\[([^[\]]+)\])?(?:\[(\d+)\])?$` 提取 `标题[路由][排序]`
@@ -153,6 +187,6 @@ v1.5.0 起推荐路径式路由（`/action/xxx`），后端同时兼容旧的查
 4. **输出 JSON**：`Content-Type: application/json; charset=utf-8`，UTF-8 编码输出
 5. **跨域**（可选）：若与页面不同源，返回 `Access-Control-Allow-Origin: *`
 
-也可以不走动态服务：写一个编译器把目录树/索引预编译成静态 JSON 文件，把 `apiEndpoint` 指向该静态文件即可。前端会先请求路径式地址，静态服务器返回 404 后自动回退到带 `?action=` 查询参数的旧协议地址（静态服务器会忽略查询字符串），无需额外配置。
+也可以不走动态服务：按上节「静态 JSON 方案」把目录树/索引预编译成静态文件即可。
 
 继续阅读 [开发说明](#/dev)。

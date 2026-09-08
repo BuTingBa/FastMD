@@ -33,6 +33,11 @@ server {
         fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
     }
 
+    # 后端路径路由：/api/php/sidebar 等回退到 api/php/index.php（PATH_INFO 分发）
+    location /api/php/ {
+        try_files $uri $uri/ /api/php/index.php?$query_string;
+    }
+
     # 静态资源与 SPA 入口
     location / {
         try_files $uri $uri/ /index.html;
@@ -74,23 +79,23 @@ server {
 
 ```nginx
 location /sidebar.json {
-    rewrite ^ /api/sidebar.php last;
+    rewrite ^ /api/php/index.php?action=sidebar last;
 }
 location /search.json {
-    rewrite ^ /api/search.php last;
+    rewrite ^ /api/php/index.php?action=search last;
 }
 ```
 
-然后修改 `assets/main.js` 中的 `fetch('api/sidebar.php')` 与 `fetch('api/search.php')` 为对应的新路径即可。
+然后修改 `config.js` 的 `apiEndpoint` 为对应的新路径前缀即可（详见 [配置与服务](#/config)）。
 
 ## 换用其它后端语言
 
-PHP 接口非常简单，只需返回指定 JSON 结构：
+后端接口非常简单，只需实现两个 GET 路由、返回指定 JSON 结构：
 
-- `api/sidebar.php`：返回 `{ "data": [ ...树状结构 ] }`
-- `api/search.php`：返回 `[ ...文档列表 ]`
+- `GET /sidebar`：返回 `{ "data": [ ...树状结构 ] }`
+- `GET /search`：返回 `[ ...文档列表 ]`
 
-你可以用 Node.js、Go、Python 等任意语言实现相同接口，前端无需改动。详见 [开发说明](#/dev)。
+api 目录已按语言分目录提供官方实现（`api/php/`、`api/nodejs/`、`api/python/`），也可以用 Go、Java 等任意语言自实现；甚至完全不用后端——`api/file/` 静态 JSON 方案改一行 `apiEndpoint` 即可纯静态部署。前端无需改动，详见 [配置与服务](#/config)。
 
 ## 常见部署问题
 

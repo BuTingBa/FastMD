@@ -4,9 +4,9 @@
 
 ## 核心特性
 
-- **快速部署**：将 `.md` 文件丢入 `docs` 文件夹即可自动生成文档，PHP 接口也可用其它语言实现，超级解耦。
+- **快速部署**：将 `.md` 文件丢入 `docs` 文件夹即可自动生成文档；后端按语言分目录（PHP / Node.js / Python / 静态 JSON），改一行配置即可切换，超级解耦。
 - **零编译 / 零构建**：完全抛弃 Node.js、Webpack、Vite 等构建工具链，文档修改即刻生效。
-- **混合架构**：PHP 处理文件系统的 I/O 遍历与结构序列化，Vanilla JS 处理路由拦截、Markdown 动态解析与 DOM 渲染。
+- **混合架构**：后端处理文件系统的 I/O 遍历与结构序列化，Vanilla JS 处理路由拦截、Markdown 动态解析与 DOM 渲染。
 - **物理路径解耦**：独创的 `标题[路由][排序]` 命名规范，将物理文件系统与前端逻辑路由彻底解耦，提供极高的菜单定制自由度。
 - **高性能本地检索**：后端一次性聚合索引 + 前端 Fuse.js 模糊匹配，兼顾网络性能与检索精度。
 - **现代化渲染**：原生集成代码高亮（Prism）、数学公式（KaTeX）、图表绘制（Mermaid），企业级排版体验。
@@ -17,7 +17,7 @@
 
 | 层级 | 技术 |
 |---|---|
-| 数据层 | PHP 8+（文件系统遍历与 JSON 序列化） |
+| 数据层 | 任意语言（官方实现：PHP 5.6~8.4 / Node.js / Python 3 / 静态 JSON） |
 | 网络层 | 浏览器 Fetch API + DOM `hashchange` 事件 |
 | 展示层 | Vanilla JS + CSS Variables |
 | 解析引擎 | markdown-it、Prism.js、KaTeX、Mermaid、Fuse.js |
@@ -29,10 +29,11 @@
 │  index.html            # 前端入口（单页应用核心）
 │  config.js             # 全局配置（站点标题 / 后端接口地址）
 │  CHANGELOG.md          # 项目更新日志
-├─api/                   # 后端接口（三种官方实现，协议一致可互换）
-│      main.php          # PHP 实现（默认，5.6~8.4 单文件兼容）
-│      main.js           # Node.js 实现（零依赖）
-│      main.py           # Python 实现（标准库）
+├─api/                   # 后端接口（按语言分目录，各以 index 为默认入口，协议一致可互换）
+│  ├─php/                # PHP 实现（默认，5.6~8.4 单文件兼容）
+│  ├─nodejs/             # Node.js 实现（零依赖，可独立托管整站）
+│  ├─python/             # Python 实现（标准库，可独立托管整站）
+│  └─file/               # 静态 JSON 方案（预渲染数据，零后端部署）
 ├─assets/                # 静态资源
 │      main.css          # 全局样式（CSS Variables 主题）
 │      main.js           # 前端核心引擎

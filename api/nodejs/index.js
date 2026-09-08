@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 /**
- * api/main.js —— FastMD 统一后端入口（Node.js 实现，零依赖）
- * 与 api/main.php 协议完全一致（路径式路由为推荐协议，旧查询参数式向后兼容）：
- *   GET /action/sidebar → 目录树 JSON：{"data": [...]}
- *   GET /action/search  → 搜索索引 JSON：[{...}, ...]
- *   GET ?action=sidebar / ?action=search（旧协议，同样支持）
+ * api/nodejs/index.js —— FastMD 后端入口（Node.js 实现，零依赖）
+ * 与 api/php/index.php 协议完全一致（路径式路由为推荐协议，查询参数式向后兼容）：
+ *   GET /sidebar → 目录树 JSON：{"data": [...]}
+ *   GET /search  → 搜索索引 JSON：[{...}, ...]
+ *   GET ?action=sidebar / ?action=search（查询参数式，同样支持）
  *
- * 除 API 路由外的其它路径一律按静态文件处理（根目录为项目根），
+ * 除 /sidebar、/search 路由外的其它路径一律按静态文件处理（根目录为项目根），
  * 因此本服务可独立托管整站：api 目录下的文件也能以目录方式直接访问。
  *
  * 启动方式：
- *   node api/main.js            # 默认监听 127.0.0.1:8300，可直接当整站服务器
- *   PORT=9000 node api/main.js  # 自定义端口（Windows: set PORT=9000）
+ *   node api/nodejs/index.js            # 默认监听 127.0.0.1:8300，可直接当整站服务器
+ *   PORT=9000 node api/nodejs/index.js  # 自定义端口（Windows: set PORT=9000）
  *
  * 与前端联调（两种用法）：
  *   1. 独立整站：浏览器直接访问 http://127.0.0.1:8300/ ，config.js 无需修改
- *   2. 仅当接口：将 config.js 的 apiEndpoint 改为 "http://127.0.0.1:8300/"
+ *   2. 仅当接口：将 config.js 的 apiEndpoint 改为 "http://127.0.0.1:8300"
  *      （本服务已开启 CORS，允许跨域调用）
  */
 
@@ -27,8 +27,8 @@ const path = require('path');
 
 const PORT = process.env.PORT || 8300;
 const HOST = process.env.HOST || '127.0.0.1';
-// 静态服务根目录 = 项目根（api 的上一级）
-const ROOT_DIR = path.join(__dirname, '..');
+// 静态服务根目录 = 项目根（本文件位于 <root>/api/nodejs/，取上两级）
+const ROOT_DIR = path.join(__dirname, '..', '..');
 const DOCS_DIR = path.join(ROOT_DIR, 'docs');
 
 // 常见静态资源 MIME 类型
@@ -229,16 +229,16 @@ const server = http.createServer((req, res) => {
 
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
-    // 路由解析（优先级：?action= 查询参数 > /action/xxx 路径 > 静态文件）
+    // 路由解析（优先级：?action= 查询参数 > /sidebar|/search 路径 > 静态文件）
     const queryAction = url.searchParams.get('action');
     if (queryAction) {
         sendAction(res, queryAction);
         return;
     }
 
-    const segments = url.pathname.replace(/^\/+|\/+$/g, '').split('/');
-    if (segments[0] === 'action' && segments[1]) {
-        sendAction(res, segments[1]);
+    const route = url.pathname.replace(/^\/+|\/+$/g, '');
+    if (route === 'sidebar' || route === 'search') {
+        sendAction(res, route);
         return;
     }
 
@@ -248,5 +248,5 @@ const server = http.createServer((req, res) => {
 server.listen(PORT, HOST, () => {
     console.log(`FastMD Node.js backend listening at http://${HOST}:${PORT}/`);
     console.log(`docs dir: ${DOCS_DIR}`);
-    console.log('API routes: /action/sidebar, /action/search (legacy: ?action=...)');
+    console.log('API routes: /sidebar, /search (legacy: ?action=...)');
 });

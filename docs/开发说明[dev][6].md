@@ -59,13 +59,13 @@ window.routeMap = {
 
 ### 3. 全文搜索（`SearchSys`）
 
-首次唤起搜索框时拉取后端接口（`/action/search`），后端聚合所有文档纯文本返回 JSON 数组。前端用 Fuse.js 建立模糊匹配索引，搜索时支持关键词高亮与摘要截取。
+首次唤起搜索框时拉取后端接口（`/search`），后端聚合所有文档纯文本返回 JSON 数组。前端用 Fuse.js 建立模糊匹配索引，搜索时支持关键词高亮与摘要截取。
 
 ## 后端扩展
 
 ### 修改命名解析正则
 
-当前正则位于 `api/main.php`：
+当前正则位于 `api/php/index.php`（Node/Python 版结构相同）：
 
 ```php
 preg_match('/^([^\[\]]+)(?:\[([^\[\]]+)\])?(?:\[(\d+)\])?$/', $nameWithoutExt, $matches);

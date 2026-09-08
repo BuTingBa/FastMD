@@ -1,0 +1,2 @@
+# FastMD：把 /sidebar、/search 等不存在的路径回退到 index.php（PATH_INFO 路由）
+FallbackResource index.php

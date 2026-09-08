@@ -2,6 +2,25 @@
 
 > 最新改动追加在最前面。
 
+## v1.6.0.202609081442
+
+### 改动
+- **路由协议简化**：去掉 `action` 段，接口地址直接拼 `{apiEndpoint}/sidebar`、`{apiEndpoint}/search`：
+  - `index.html` — 内联全局脚本更新为新协议；并修复用户调整时脚本位置错放在 app.js 之后导致 `fetchApi` 未定义的问题（现位于 config.js 与 main.js 之间）
+  - `config.js` — 注释同步新协议；`apiEndpoint` 默认 `api/php`，配置示例补充 `api/file` 静态方案
+- **api 目录按语言重组**（采纳用户手动调整的结构，各目录以 `index` 为默认入口，一眼分辨语言）：
+  - `api/php/index.php`（原 api/main.php）— 修复移动到二级目录后 `$docsDir` 层级错误；新增 `api/php/.htaccess`（FallbackResource），Apache 下 `/sidebar`、`/search` 路径直接命中
+  - `api/nodejs/index.js`（原 api/main.js）— 修复 ROOT_DIR 层级错误；路由改为 `/sidebar`、`/search`
+  - `api/python/index.py`（原 api/main.py）— 同上
+- **新增静态 JSON 方案 `api/file/`**：预渲染好的 `sidebar`、`search` 两个 JSON 文件（已用当前 docs 生成演示数据），`apiEndpoint` 改为 `"api/file"` 即可零后端纯静态部署（GitHub Pages / 对象存储均可）
+- 前端 `fetchApi` 路径式请求失败时仍自动回退 `?action=` 查询参数，兼容 php -S、未配置 rewrite 的 nginx 等
+
+### 文档
+- `docs/配置与服务[config][7].md` — 重写：新协议、api 目录结构、PHP 目录入口说明（Apache/nginx/php -S 三种情况）、静态 JSON 方案与再生成命令
+- `README.md` — 特性新增「纯静态也能跑」；部署方式新增零后端方案；项目结构按新 api 目录更新
+- `docs/部署指南[deploy][2].md` — nginx 配置增加 api/php 路由回退；隐藏接口/换语言章节更新
+- `docs/项目介绍[home][0].md`、`docs/开发说明[dev][6].md`、`docs/渲染示例[render][4].md` — 同步新路径
+
 ## v1.5.1.202609081423
 
 ### 改动

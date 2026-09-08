@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-api/main.py —— FastMD 统一后端入口（Python 3 标准库实现，零依赖）
-与 api/main.php 协议完全一致（路径式路由为推荐协议，旧查询参数式向后兼容）：
-  GET /action/sidebar -> 目录树 JSON：{"data": [...]}
-  GET /action/search  -> 搜索索引 JSON：[{...}, ...]
-  GET ?action=sidebar / ?action=search（旧协议，同样支持）
+api/python/index.py —— FastMD 后端入口（Python 3 标准库实现，零依赖）
+与 api/php/index.php 协议完全一致（路径式路由为推荐协议，查询参数式向后兼容）：
+  GET /sidebar -> 目录树 JSON：{"data": [...]}
+  GET /search  -> 搜索索引 JSON：[{...}, ...]
+  GET ?action=sidebar / ?action=search（查询参数式，同样支持）
 
-除 API 路由外的其它路径一律按静态文件处理（根目录为项目根），
+除 /sidebar、/search 路由外的其它路径一律按静态文件处理（根目录为项目根），
 因此本服务可独立托管整站：api 目录下的文件也能以目录方式直接访问。
 
 启动方式：
-  python api/main.py            # 默认监听 127.0.0.1:8300，可直接当整站服务器
-  PORT=9000 python api/main.py  # 自定义端口（Windows: set PORT=9000）
+  python api/python/index.py            # 默认监听 127.0.0.1:8300，可直接当整站服务器
+  PORT=9000 python api/python/index.py  # 自定义端口（Windows: set PORT=9000）
 
 与前端联调（两种用法）：
   1. 独立整站：浏览器直接访问 http://127.0.0.1:8300/ ，config.js 无需修改
-  2. 仅当接口：将 config.js 的 apiEndpoint 改为 "http://127.0.0.1:8300/"
+  2. 仅当接口：将 config.js 的 apiEndpoint 改为 "http://127.0.0.1:8300"
      （本服务已开启 CORS，允许跨域调用）
 """
 
@@ -30,8 +30,8 @@ from urllib.parse import urlparse, parse_qs
 
 PORT = int(os.environ.get('PORT', '8300'))
 HOST = os.environ.get('HOST', '127.0.0.1')
-# 静态服务根目录 = 项目根（api 的上一级）
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir))
+# 静态服务根目录 = 项目根（本文件位于 <root>/api/python/，取上两级）
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
 DOCS_DIR = os.path.join(ROOT_DIR, 'docs')
 
 # ============================ 公共函数 ============================
@@ -166,14 +166,14 @@ class Handler(SimpleHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
 
-        # 路由解析（优先级：?action= 查询参数 > /action/xxx 路径 > 静态文件）
+        # 路由解析（优先级：?action= 查询参数 > /sidebar|/search 路径 > 静态文件）
         query_action = (parse_qs(parsed.query).get('action') or [''])[0]
         if query_action:
             return self.send_api(query_action)
 
-        segments = [s for s in parsed.path.split('/') if s]
-        if segments and segments[0] == 'action' and len(segments) > 1:
-            return self.send_api(segments[1])
+        route = parsed.path.strip('/')
+        if route in ('sidebar', 'search'):
+            return self.send_api(route)
 
         super().do_GET()
 
@@ -209,7 +209,7 @@ def main():
     server = ThreadingHTTPServer((HOST, PORT), partial(Handler, directory=ROOT_DIR))
     print('FastMD Python backend listening at http://%s:%s/' % (HOST, PORT))
     print('docs dir: %s' % DOCS_DIR)
-    print('API routes: /action/sidebar, /action/search (legacy: ?action=...)')
+    print('API routes: /sidebar, /search (legacy: ?action=...)')
     try:
         server.serve_forever()
     except KeyboardInterrupt:

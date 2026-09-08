@@ -1,7 +1,7 @@
 window.routeMap = {};
 window.firstRoute = null;
 
-// 注：SITE_TITLE / fetchApi 等全局定义在根目录 config.js 中（先于本文件加载），
+// 注：SITE_TITLE / fetchApi 等全局定义在 index.html 内联脚本中（先于本文件加载），
 // 此处直接使用：fetchApi('sidebar' | 'search')、SITE_TITLE
 
 // ================= 0. 首次加载进度条控制 =================

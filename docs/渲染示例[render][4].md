@@ -170,7 +170,7 @@ sequenceDiagram
     participant F as 前端
     participant B as 后端
     U->>F: 点击搜索
-    F->>B: GET /api/main.php/action/search
+    F->>B: GET /api/php/search
     B-->>F: 返回 JSON 结果
     F-->>U: 渲染搜索结果列表
 ```
