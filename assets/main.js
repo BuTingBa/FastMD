@@ -1,6 +1,9 @@
 window.routeMap = {};
 window.firstRoute = null;
 
+// 注：SITE_TITLE / apiUrl 等全局定义在根目录 config.js 中（先于本文件加载），
+// 此处直接使用：apiUrl('sidebar' | 'search')、SITE_TITLE
+
 // ================= 0. 首次加载进度条控制 =================
 // 侧边栏与首篇文档渲染完成后淡出移除；8 秒兜底防止意外卡死
 function hideAppLoader() {
@@ -13,7 +16,7 @@ function hideAppLoader() {
 // ================= 1. 拉取并渲染菜单结构 =================
 async function initTree() {
     try {
-        const res = await fetch('api/sidebar.php');
+        const res = await fetch(apiUrl('sidebar'));
         const { data } = await res.json();
         DOM.menu.innerHTML = renderSidebar(data);
         initSidebarResizer();
@@ -63,7 +66,7 @@ async function loadContent() {
     const actualFilePath = window.routeMap[hashPath];
     if (!actualFilePath) {
         render404(hashPath, '左侧菜单未找到匹配路由映射');
-        document.title = "404 未找到 - 项目文档";
+        document.title = "404 未找到 - " + SITE_TITLE;
         return;
     }
 
@@ -423,7 +426,7 @@ function highlightActiveMenu(activeRoute) {
 function updateDocumentTitle(activeRoute) {
     const activeLink = DOM.menu.querySelector(`a[data-route="${activeRoute}"]`);
     if (activeLink) {
-        document.title = `${activeLink.innerText} - 项目文档`;
+        document.title = `${activeLink.innerText} - ${SITE_TITLE}`;
     }
 }
 

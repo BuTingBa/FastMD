@@ -53,7 +53,7 @@
                 <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2"
                     stroke-linejoin="round" fill="none" />
             </svg>
-            项目文档
+            <span id="site-title">FastMD</span>
         </div>
 
         <!-- 右侧操作区：搜索 + 移动端菜单按钮 -->
@@ -95,10 +95,10 @@
                 <div class="sidebar-footer-text">
                     <!-- &copy; 2026 <a href="https://knownil.com/" target="_blank">重庆知无科技有限公司</a><br>
                     <a href="https://beian.miit.gov.cn/" target="_blank">渝ICP备2023010588号-4</a> -->
-					
+
 					&copy; 2026 by <a href="https://github.com/BuTingBa/FastMD" target="_blank">FastMD</a><br>
-					
-					
+
+
                 </div>
                 <div class="sidebar-footer-toggle" id="sidebar-collapse-btn" title="收起菜单">
                     <span class="knownil icon-fold"></span>
@@ -184,62 +184,11 @@
     <!-- Mermaid：用于渲染流程图/时序图/类图/甘特图/饼图/状态图等图表 -->
     <script src="assets/vendor/mermaid@10.9.1/dist/mermaid.min.js"></script>
 
+    <!-- 全局配置（站点标题 / 后端接口地址），必须在 main.js 之前引入 -->
+    <script src="config.js?v=202609081231"></script>
     <script src="assets/main.js?v=202609081231"></script>
-    <script>
-        const md = window.markdownit({ html: true, linkify: true, typographer: true });
-
-        // 【新增】：将 Texmath 插件挂载到 markdown-it 引擎上
-        md.use(window.texmath, {
-            engine: window.katex,
-            delimiters: 'dollars', // 识别 $ 行内公式 和 $$ 块级公式
-            katexOptions: { macros: { "\\RR": "\\mathbb{R}" } } // 可选：支持部分自定义宏
-        });
-
-        // Vitepress 风格容器块：::: tip / info / warning / danger [可选自定义标题]
-        // 例：::: warning 注意 \n 内容 \n :::  →  彩色提示框
-        (function () {
-            var defaultTitles = { tip: '提示', info: '信息', warning: '注意', danger: '警告' };
-            ['tip', 'info', 'warning', 'danger'].forEach(function (name) {
-                md.use(window.markdownitContainer, name, {
-                    render: function (tokens, idx) {
-                        if (tokens[idx].nesting === 1) {
-                            // 容器名后的剩余文本作为自定义标题，没有则用默认标题
-                            var m = tokens[idx].info.trim().match(/^\S+\s+(.*)$/);
-                            var title = (m && m[1]) ? m[1] : defaultTitles[name];
-                            return '<div class="custom-block ' + name + '"><p class="custom-block-title">' +
-                                md.utils.escapeHtml(title) + '</p>\n';
-                        }
-                        return '</div>\n';
-                    }
-                });
-            });
-        })();
-
-        // DOM 映射
-        const DOM = {
-            menu: document.getElementById('sidebar-menu'),
-            content: document.getElementById('content-body'),
-            toc: document.getElementById('toc-menu'),
-            mobileBtn: document.getElementById('mobile-menu-btn'),
-            mobileBackdrop: document.getElementById('mobile-backdrop'),
-            sidebar: document.querySelector('.vp-sidebar'),
-
-            // 展开/收缩全部的控制函数
-            toggleAll: function (expand) {
-                document.querySelectorAll('.sidebar-menu details').forEach(d => d.open = expand);
-            }
-        };
-
-        window.addEventListener('hashchange', loadContent);
-
-        // 初始化布局控制（侧边栏自动收起/展开 + 右侧目录手动收起/展开）
-        // 必须在 DOM 对象定义之后调用，因为内部依赖 DOM.sidebar 等引用
-        LayoutCtrl.init();
-
-        initTree().then(() => loadContent()).finally(hideAppLoader);
-        // 兜底：极端情况下（接口超时等）8 秒后强制隐藏进度条，避免页面卡在加载态
-        setTimeout(hideAppLoader, 8000);
-    </script>
+    <!-- 应用启动入口（markdown 引擎装配 + 配置应用 + 启动），依赖 config.js 与 main.js -->
+    <script src="assets/app.js?v=202609081231"></script>
 </body>
 
 </html>
