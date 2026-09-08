@@ -2,6 +2,16 @@
 
 > 最新改动追加在最前面。
 
+## v1.4.8.202609081231
+
+### 改动
+- **品牌更名：Fast Wiki → FastMD**。全面替换系统中的品牌名称：
+  - `index.html` — 浏览器标签页标题、顶部导航 Logo 文字、侧边栏版权（© 2026 by FastMD，链接指向新仓库 github.com/BuTingBa/FastMD）
+  - `assets/main.js` — 页面标题后缀「项目文档」→「FastMD」（欢迎页/404/加载失败/正文页共 4 处）；控制台 ASCII 横幅「Fast Wiki v1.0」→「FastMD v1.4.8」
+  - `README.md` — 标题更名（并统一用户手改的 "Fast MD" 为 "FastMD"）
+  - `docs/` — 项目介绍、快速开始、渲染示例、环境准备中的品牌引用同步更名
+  - main.js 版本号 → `?v=202609081231` 绕过浏览器缓存
+
 ## v1.4.7.202609080214
 
 ### 新增

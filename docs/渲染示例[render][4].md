@@ -102,7 +102,7 @@ nohup php -S 0.0.0.0:8000 > server.log 2>&1 &
 
 ```json
 {
-    "name": "Fast Wiki",
+    "name": "FastMD",
     "version": "1.2.0",
     "features": ["zero-build", "php-backend", "mermaid", "katex"],
     "engines": {
@@ -235,4 +235,4 @@ classDiagram
 
 ---
 
-以上即 Fast Wiki 支持的全部渲染能力。可在 [开发说明](#/dev) 中了解如何扩展。
+以上即 FastMD 支持的全部渲染能力。可在 [开发说明](#/dev) 中了解如何扩展。

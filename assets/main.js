@@ -55,7 +55,7 @@ async function loadContent() {
             window.location.hash = '#/' + window.firstRoute;
         } else {
             DOM.content.innerHTML = '<h1>欢迎使用</h1><p>请在 docs 文件夹放入文档。</p>';
-            document.title = "欢迎 - 项目文档";
+            document.title = "欢迎 - FastMD";
         }
         return;
     }
@@ -76,7 +76,7 @@ async function loadContent() {
         text = await res.text();
     } catch (err) {
         render404(hashPath, err.message);
-        document.title = "加载失败 - 项目文档";
+        document.title = "加载失败 - FastMD";
         return;
     }
 
@@ -718,5 +718,5 @@ KKKKKKKKK    KKKKKKK  nnnnnn    nnnnnn   ooooooooooo            www             
                                                                                                                                 
                                                                                                                                 
  重庆知无科技有限公司 版权所有
- Fast Wiki v1.0                                                                                                                               
+ FastMD v1.4.8                                                                                                                               
                                                                                                                                 `);

@@ -4,7 +4,7 @@
 
 ## 准备 PHP 环境
 
-Fast Wiki 的后端只需 PHP 8.0+，无需数据库。
+FastMD 的后端只需 PHP 8.0+，无需数据库。
 
 ### Windows
 

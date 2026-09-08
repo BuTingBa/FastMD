@@ -31,7 +31,7 @@ docs/
 文件内容：
 
 ```markdown
-# Hello Fast Wiki
+# Hello FastMD
 
 这是一段正文内容。
 ```
