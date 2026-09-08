@@ -1,6 +1,6 @@
 # 部署指南
 
-本系统零构建，部署只需一个能解析 PHP 的 Web 容器。
+本系统零构建，后端支持多种部署形态（默认 PHP；也可 Node.js / Python / 纯静态 JSON，见文末「换用其它后端语言」），按需选择：
 
 ## 方式一：PHP 内置服务器（开发 / 内网演示）
 
@@ -11,6 +11,10 @@ php -S 0.0.0.0:8000
 ```
 
 访问 `http://服务器IP:8000/` 即可。
+
+::: tip 路由说明
+内置服务器不解析 `.htaccess`，路径式请求 `api/php/sidebar` 会 404，前端自动回退到 `?action=sidebar` 查询参数方式，功能完全一致，无需处理。
+:::
 
 ## 方式二：Nginx + PHP-FPM（生产推荐）
 
@@ -49,7 +53,7 @@ server {
 
 ## 方式三：Apache
 
-项目目录下新建 `.htaccess`：
+项目根目录新建 `.htaccess`（SPA 入口回退）：
 
 ```apache
 <IfModule mod_rewrite.c>
@@ -60,7 +64,9 @@ server {
 </IfModule>
 ```
 
-确保 Apache 已启用 `mod_rewrite` 与 PHP 解析。
+确保 Apache 已启用 `mod_rewrite` 与 PHP 解析，且虚拟主机配置 `AllowOverride All`（允许读取 .htaccess）。
+
+后端路由无需额外配置：`api/php/.htaccess`（`FallbackResource index.php`）已内置，`/api/php/sidebar`、`/api/php/search` 路径会自动回退到 `api/php/index.php` 并按 `PATH_INFO` 分发。
 
 ## 部署到子目录
 
@@ -78,15 +84,15 @@ server {
 如果不想暴露 `api/` 路径，可在 Nginx 中增加内部重写：
 
 ```nginx
-location /sidebar.json {
+location /data/sidebar {
     rewrite ^ /api/php/index.php?action=sidebar last;
 }
-location /search.json {
+location /data/search {
     rewrite ^ /api/php/index.php?action=search last;
 }
 ```
 
-然后修改 `config.js` 的 `apiEndpoint` 为对应的新路径前缀即可（详见 [配置与服务](#/config)）。
+然后修改 `config.js` 的 `apiEndpoint` 为 `"data"`，前端请求 `data/sidebar`、`data/search` 即被重写到后端（详见 [配置与服务](#/config)）。
 
 ## 换用其它后端语言
 

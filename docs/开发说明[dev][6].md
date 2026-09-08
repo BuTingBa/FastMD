@@ -7,8 +7,8 @@
 ```mermaid
 flowchart LR
     U[浏览器] -->|hashchange| F[前端 main.js]
-    F -->|fetch| S1[api/sidebar.php]
-    F -->|fetch| S2[api/search.php]
+    F -->|fetch| S1[后端 /sidebar]
+    F -->|fetch| S2[后端 /search]
     F -->|fetch| D[docs/*.md]
     S1 -->|JSON 菜单树| F
     S2 -->|JSON 检索索引| F
@@ -20,7 +20,7 @@ flowchart LR
 
 ### 1. 菜单构建（`initTree`）
 
-前端启动时调用 `api/sidebar.php`，后端递归扫描 `docs/` 目录，按 `标题[路由][排序]` 解析每个文件与文件夹，返回树状 JSON：
+前端启动时请求后端 `{apiEndpoint}/sidebar`（默认 `api/php/sidebar`，见 `config.js`），后端递归扫描 `docs/` 目录，按 `标题[路由][排序]` 解析每个文件与文件夹，返回树状 JSON：
 
 ```json
 {

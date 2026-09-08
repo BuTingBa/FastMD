@@ -2,6 +2,16 @@
 
 > 最新改动追加在最前面。
 
+## v1.6.1.202609081519
+
+### 文档
+- `docs/部署指南[deploy][2].md` — 清理旧接口遗留内容：
+  - 开头简介更新为多形态部署（PHP / Node.js / Python / 纯静态）
+  - php -S 方式补充路由说明（内置服务器不解析 .htaccess，前端自动回退 `?action=`，功能一致）
+  - Apache 方式补充 `AllowOverride All` 要求与 `api/php/.htaccess`（FallbackResource）自动生效说明
+  - 「隐藏后端接口」示例从 `.json` 旧地址改为 `/data/sidebar`、`/data/search` 新协议路径，并补全 `apiEndpoint` 修改步骤
+- `docs/开发说明[dev][6].md` — 架构图与菜单构建章节的 `api/sidebar.php`、`api/search.php` 旧接口引用更新为 `{apiEndpoint}/sidebar`、`{apiEndpoint}/search`
+
 ## v1.6.0.202609081442
 
 ### 改动
