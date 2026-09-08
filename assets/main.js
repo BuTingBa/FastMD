@@ -638,7 +638,7 @@ const SearchSys = {
                 this.isDataLoaded = true;
                 this.performSearch(this.input.value); 
             } catch (err) {
-                this.resultsArea.innerHTML = '<li style="padding: 16px; color: red;">索引加载失败，请检查 api/search.php。</li>';
+                this.resultsArea.innerHTML = '<li style="padding: 16px; color: red;">索引加载失败，请检查 config.js 中 apiEndpoint 的接口地址配置。</li>';
             }
         }
     },

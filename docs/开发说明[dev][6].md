@@ -59,7 +59,7 @@ window.routeMap = {
 
 ### 3. 全文搜索（`SearchSys`）
 
-首次唤起搜索框时拉取 `api/search.php`，后端聚合所有文档纯文本返回 JSON 数组。前端用 Fuse.js 建立模糊匹配索引，搜索时支持关键词高亮与摘要截取。
+首次唤起搜索框时拉取后端接口（`?action=search`），后端聚合所有文档纯文本返回 JSON 数组。前端用 Fuse.js 建立模糊匹配索引，搜索时支持关键词高亮与摘要截取。
 
 ## 后端扩展
 
@@ -120,7 +120,7 @@ preg_match('/^([^\[\]]+)(?:\[([^\[\]]+)\])?(?:\[(\d+)\])?(?:\[(icon-[a-z]+)\])?$
 :::
 ```
 
-引入 `markdown-it-container`，在 `index.html` 内联脚本中注册：
+引入 `markdown-it-container`，在 `assets/app.js`（应用启动入口）中注册：
 
 ```javascript
 md.use(window.markdownitContainer, 'tip', {

@@ -2,6 +2,27 @@
 
 > 最新改动追加在最前面。
 
+## v1.5.0.202609081327
+
+### 架构重构：配置外置 + 后端接口统一 + 多语言后端
+
+- **配置外置**：新增根目录 `config.js`，集中配置站点标题（`siteTitle`）与后端接口地址（`apiEndpoint`），默认 `api/main.php`；支持相对路径（自动适配任意层级子目录部署）与绝对路径（跨域需后端返回 CORS 头），换语言后端只需改一行。
+- **后端接口合并**：`search.php` + `sidebar.php` 合并为单入口 `api/main.php`，通过 `?action=sidebar / search` 参数分发，二次开发按文件名即可分辨后端语言。
+- **多语言后端**：官方提供三种等价实现，协议一致可互换：
+  - `api/main.php` — PHP 5.6~8.4 单文件（含 `str_starts_with` polyfill、locale 缺陷规避）
+  - `api/main.js` — Node.js 零依赖（内置 http 模块，端口可用 `PORT` 环境变量覆盖）
+  - `api/main.py` — Python 3 标准库（`http.server`，端口可用 `PORT` 环境变量覆盖）
+- **前端瘦身**：`index.html` 内联脚本全部抽取到 `assets/app.js`（markdown 引擎装配 + 容器块注册 + 启动），入口只保留资源引用；`assets/main.js` 改为从 `config.js` 读取标题与接口地址。
+- **文档更新**：
+  - 新增 `docs/配置与服务[config][7].md` — config.js 配置项、路径规则、后端接口协议、扫描规则、自定义后端指南
+  - `README.md` — 突出多语言后端可替换、单文件配置与多种部署方式
+  - 部署指南 / 开发说明 / 项目介绍 / 渲染示例 — 同步新接口与新结构
+
+### 改动文件
+- 新增：`config.js`、`api/main.php`、`api/main.js`、`api/main.py`、`assets/app.js`、`docs/配置与服务[config][7].md`、`.gitignore`
+- 删除：`api/search.php`、`api/sidebar.php`（及 PHP5.6 兼容版本）
+- 修改：`index.html`、`assets/main.js`、`README.md`、docs 相关文档
+
 ## v1.4.8.202609081231
 
 ### 改动

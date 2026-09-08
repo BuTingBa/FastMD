@@ -27,13 +27,16 @@
 ```text
 /项目根目录
 │  index.html            # 前端入口（单页应用核心）
+│  config.js             # 全局配置（站点标题 / 后端接口地址）
 │  CHANGELOG.md          # 项目更新日志
-├─api/                   # 后端接口
-│      sidebar.php       # 扫描 docs 目录生成菜单层级
-│      search.php        # 递归读取文档构建全文检索索引
+├─api/                   # 后端接口（三种官方实现，协议一致可互换）
+│      main.php          # PHP 实现（默认，5.6~8.4 单文件兼容）
+│      main.js           # Node.js 实现（零依赖）
+│      main.py           # Python 实现（标准库）
 ├─assets/                # 静态资源
 │      main.css          # 全局样式（CSS Variables 主题）
 │      main.js           # 前端核心引擎
+│      app.js            # 应用启动入口（markdown 引擎装配 + 启动）
 │      font/             # 字体图标
 └─docs/                  # 【核心工作区】所有 Markdown 文档
 ```
