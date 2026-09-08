@@ -1,0 +1,10 @@
+# Python 运行缓存
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+
+# 系统文件
+Thumbs.db
+.DS_Store
