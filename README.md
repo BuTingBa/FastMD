@@ -1,6 +1,6 @@
 # Fast MD 轻量级文档渲染系统
 
-> 一套基于「纯运行时驱动」的轻量级文档渲染引擎。结合 Docsify 的零构建优势与 Vitepress 的现代化 UI/UX 体验，并通过轻量级的 PHP 后端介入，彻底解决纯前端架构在文件系统读取、索引构建和路由管理上的先天性缺陷。
+> 一套基于「纯运行时驱动」的轻量级文档渲染引擎。结合 Docsify 的零构建优势与 Vitepress 的现代化 UI/UX 体验，并通过轻量级的 PHP（或其它编程语言） 后端介入，彻底解决纯前端架构在文件系统读取、索引构建和路由管理上的先天性缺陷。
 
 * 预览地址：[https://cli.cc/wiki](https://cli.cc/wiki)
 * 查看文档：[https://cli.cc/wiki](https://cli.cc/wiki)
