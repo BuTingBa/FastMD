@@ -1,7 +1,11 @@
-window.routeMap = {};
+window.routeMap = Object.create(null);
+window.routeTitles = Object.create(null);
+let pageVersion = 0;
+let pageController = new AbortController();
+let mermaidQueue = Promise.resolve();
 window.firstRoute = null;
 
-// 注：SITE_TITLE / fetchApi 等全局定义在 index.html 内联脚本中（先于本文件加载），
+// SITE_TITLE / fetchApi 等共享函数定义在 runtime.js 中。
 // 此处直接使用：fetchApi('sidebar' | 'search')、SITE_TITLE
 
 // ================= 0. 首次加载进度条控制 =================
@@ -16,14 +20,17 @@ function hideAppLoader() {
 // ================= 1. 拉取并渲染菜单结构 =================
 async function initTree() {
     try {
-        const res = await fetchApi('sidebar');
-        const { data } = await res.json();
+        const { data } = await fetchApi('sidebar');
+        window.routeMap = Object.create(null);
+        window.routeTitles = Object.create(null);
+        window.firstRoute = null;
         DOM.menu.innerHTML = renderSidebar(data);
         initSidebarResizer();
         initMobileMenu(); // 初始化移动端菜单事件
     } catch (err) {
         console.error("加载目录树失败:", err);
-        DOM.menu.innerHTML = '<p style="color:var(--vp-c-text-2);font-size:0.9rem;">加载文档出错或不存在文档</p>';
+        DOM.menu.innerHTML = '<p>目录加载失败，请检查接口或索引文件。</p><button type="button" onclick="location.reload()">重新加载</button>';
+        throw err;
     }
 }
 
@@ -34,14 +41,16 @@ function renderSidebar(items) {
             html += `
             <li class="dir-group">
                 <details>
-                    <summary class="dir-title">${item.title}</summary>
+                    <summary class="dir-title">${escapeHtml(item.title)}</summary>
                     <div class="nested-menu">${renderSidebar(item.children)}</div>
                 </details>
             </li>`;
         } else {
+            if (Object.hasOwn(window.routeMap, item.fullRoute)) throw new Error('重复路由：' + item.fullRoute);
             window.routeMap[item.fullRoute] = item.actualPath;
+            window.routeTitles[item.fullRoute] = item.title;
             if (!window.firstRoute) window.firstRoute = item.fullRoute;
-            html += `<li><a href="#/${item.fullRoute}" data-route="${item.fullRoute}">${item.title}</a></li>`;
+            html += `<li><a href="${routeHref(item.fullRoute)}" data-route="${escapeHtml(item.fullRoute)}">${escapeHtml(item.title)}</a></li>`;
         }
     });
     html += '</ul>';
@@ -50,15 +59,25 @@ function renderSidebar(items) {
 
 // ================= 2. 路由监听与内容加载 =================
 async function loadContent() {
-    let hash = window.location.hash.replace(/^#\//, '');
-    let hashPath = decodeURIComponent(hash);
-    
+    const version = ++pageVersion;
+    pageController.abort();
+    pageController = new AbortController();
+    const signal = pageController.signal;
+    const hash = window.location.hash.replace(/^#\/?/, '');
+    let hashPath;
+    try {
+        hashPath = decodeURIComponent(hash);
+    } catch (error) {
+        render404(hash, '链接编码不正确');
+        return;
+    }
+
     if (!hashPath) {
         if (window.firstRoute) {
             window.location.hash = '#/' + window.firstRoute;
         } else {
             DOM.content.innerHTML = '<h1>欢迎使用</h1><p>请在 docs 文件夹放入文档。</p>';
-            document.title = "欢迎 - FastMD";
+            document.title = '欢迎 - ' + SITE_TITLE;
         }
         return;
     }
@@ -74,21 +93,23 @@ async function loadContent() {
     const fetchUrl = 'docs/' + actualFilePath.split('/').map(encodeURIComponent).join('/');
 
     try {
-        const res = await fetch(fetchUrl, { cache: 'no-cache' });
+        const res = await fetch(fetchUrl, { cache: 'no-cache', signal });
         if (!res.ok) throw new Error(`Fetch 状态异常 (${res.status})`);
         text = await res.text();
     } catch (err) {
+        if (signal.aborted || version !== pageVersion) return;
         render404(hashPath, err.message);
-        document.title = "加载失败 - FastMD";
+        document.title = "加载失败 - " + SITE_TITLE;
         return;
     }
 
+    if (version !== pageVersion) return;
     try {
         DOM.content.innerHTML = md.render(text);
         if (window.Prism) Prism.highlightAllUnder(DOM.content);
 
         // 渲染 Mermaid 图表（流程图/时序图/甘特图等），异步确保不阻塞后续逻辑
-        renderMermaid();
+        mermaidQueue = mermaidQueue.catch(() => {}).then(() => renderMermaid(version));
 
         generateTOC();
         highlightActiveMenu(hashPath);
@@ -102,7 +123,7 @@ async function loadContent() {
     } catch (err) {
         DOM.content.innerHTML = `<div class="custom-block warning" style="border-color: red; background-color: #ffe6e6;">
             <p class="custom-block-title" style="color: red;">渲染异常</p>
-            <p>在解析文档或渲染代码高亮时发生错误：<br><code>${err.message}</code></p>
+            <p>在解析文档或渲染代码高亮时发生错误：<br><code>${escapeHtml(err.message)}</code></p>
         </div>` + DOM.content.innerHTML;
     }
 }
@@ -111,8 +132,8 @@ async function loadContent() {
 // 将 markdown-it 输出的 ```mermaid 代码块转换为可视化图表
 // 特性：拖拽平移、滚轮缩放、双击复位、源码/图表切换、全屏查看
 let _mermaidInited = false;
-async function renderMermaid() {
-    if (!window.mermaid) return;
+async function renderMermaid(version) {
+    if (version !== pageVersion) return;
 
     // 渲染新内容前，先清理上一页可能残留的 mermaid 临时 DOM
     cleanupMermaidTmpDom();
@@ -120,6 +141,15 @@ async function renderMermaid() {
     // 查找所有 mermaid 代码块（markdown-it 会输出 <pre><code class="language-mermaid">）
     const mermaidCodes = DOM.content.querySelectorAll('code.language-mermaid');
     if (mermaidCodes.length === 0) return;
+    try {
+        await loadScript('assets/vendor/mermaid@10.9.1/dist/mermaid.min.js');
+    } catch (error) {
+        if (version === pageVersion) {
+            mermaidCodes.forEach(code => code.parentElement.replaceWith(buildMermaidCard('', code.textContent, error.message)));
+        }
+        return;
+    }
+    if (version !== pageVersion) return;
 
     // 关键：等待浏览器完成布局计算和字体加载后再渲染 mermaid。
     // mermaid 的 flowchart/classDiagram/gantt 等需要测量文字尺寸来计算布局。
@@ -131,13 +161,15 @@ async function renderMermaid() {
     }
     await new Promise(r => setTimeout(r, 100));
 
+    if (version !== pageVersion) return;
+
     // 首次调用时初始化 mermaid（根据系统深色模式自适应主题）
     if (!_mermaidInited) {
         const isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
         window.mermaid.initialize({
             startOnLoad: false,
             theme: isDark ? 'dark' : 'default',
-            securityLevel: 'loose',
+            securityLevel: 'strict',
             // 使用 mermaid 默认的 useMaxWidth:true 确保所有图表类型正确渲染
             // （classDiagram、gantt 等依赖 max-width 进行内部布局计算）
             // 渲染后在 buildMermaidCard 中手动移除 SVG 的 max-width 限制以支持缩放
@@ -152,6 +184,7 @@ async function renderMermaid() {
 
     // 逐个渲染：取原始文本 -> 调用 mermaid.render 生成 svg -> 替换原 <pre>
     for (let i = 0; i < mermaidCodes.length; i++) {
+        if (version !== pageVersion) return;
         const code = mermaidCodes[i];
         const pre = code.parentElement; // <pre> 标签
         const graphDefinition = code.textContent;
@@ -163,11 +196,11 @@ async function renderMermaid() {
         try {
             const { svg } = await window.mermaid.render(id, graphDefinition);
             // 构建图表卡片容器（含工具栏、图表区、源码区）
-            pre.replaceWith(buildMermaidCard(svg, graphDefinition));
+            if (version === pageVersion) pre.replaceWith(buildMermaidCard(svg, graphDefinition));
         } catch (err) {
             console.error('Mermaid 渲染失败:', err);
             // 渲染失败时，构建只显示源码的卡片，并标红提示
-            pre.replaceWith(buildMermaidCard('', graphDefinition, err.message || '语法错误'));
+            if (version === pageVersion) pre.replaceWith(buildMermaidCard('', graphDefinition, err.message || '语法错误'));
         }
     }
     // 渲染完成后清理临时容器
@@ -280,7 +313,9 @@ function bindPanZoom(stage, viewport, resetBtn) {
         viewport.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
     }
 
-    stage.addEventListener('mousedown', function (e) {
+    stage.addEventListener('pointerdown', function (e) {
+        if (e.button !== 0) return;
+        stage.setPointerCapture(e.pointerId);
         isDragging = true;
         startX = e.clientX;
         startY = e.clientY;
@@ -290,14 +325,14 @@ function bindPanZoom(stage, viewport, resetBtn) {
         e.preventDefault();
     });
 
-    document.addEventListener('mousemove', function (e) {
+    stage.addEventListener('pointermove', function (e) {
         if (!isDragging) return;
         x = startTx + (e.clientX - startX);
         y = startTy + (e.clientY - startY);
         apply();
     });
 
-    document.addEventListener('mouseup', function () {
+    stage.addEventListener('lostpointercapture', function () {
         if (!isDragging) return;
         isDragging = false;
         stage.style.cursor = 'grab';
@@ -329,7 +364,7 @@ function bindPanZoom(stage, viewport, resetBtn) {
         apply();
     });
 
-    // 复位按钮（全屏克隆时 resetBtn 为 null）
+    // 复位按钮
     if (resetBtn) {
         resetBtn.addEventListener('click', function () {
             scale = 1; x = 0; y = 0;
@@ -370,10 +405,11 @@ function bindFullscreen(card, stage, fullBtn) {
             closeBtn.style.display = 'none';
             fullBtn.style.display = 'inline-flex';
             document.removeEventListener('keydown', onKey);
+            closeBtn.removeEventListener('click', close);
         }
         function onKey(e) { if (e.key === 'Escape') close(); }
         closeBtn.addEventListener('click', close, { once: true });
-        document.addEventListener('keydown', onKey);
+        document.addEventListener('keydown', onKey, { signal: pageController.signal });
     });
 }
 
@@ -387,20 +423,11 @@ function cleanupMermaidTmpDom() {
     document.querySelectorAll('[id^="dmermaid"]').forEach(function (el) {
         el.remove();
     });
-    // 2. 清理带 overflow:hidden 且不可见的临时容器（mermaid 渲染时插入的临时 div）
-    document.querySelectorAll('body > div').forEach(function (el) {
-        const st = getComputedStyle(el);
-        // 临时容器通常 position:absolute 且无内容尺寸
-        if ((st.position === 'absolute' || st.position === 'fixed') &&
-            el.offsetWidth === 0 && el.offsetHeight === 0 &&
-            st.overflow === 'hidden') {
-            el.remove();
-        }
-    });
+
 }
 
 function render404(path, msg) {
-    DOM.content.innerHTML = `<h1>404 Not Found</h1><p>未找到文档路径：${path}</p><p style="color:red;font-size:12px;">内部排错提示: ${msg}</p>`;
+    DOM.content.innerHTML = `<h1>404 Not Found</h1><p>未找到文档路径：${escapeHtml(path)}</p><p style="color:red;font-size:12px;">内部排错提示: ${escapeHtml(msg)}</p>`;
     DOM.toc.innerHTML = '';
 }
 
@@ -424,10 +451,8 @@ function highlightActiveMenu(activeRoute) {
 
 // 动态修改网站标题
 function updateDocumentTitle(activeRoute) {
-    const activeLink = DOM.menu.querySelector(`a[data-route="${activeRoute}"]`);
-    if (activeLink) {
-        document.title = `${activeLink.innerText} - ${SITE_TITLE}`;
-    }
+    const title = window.routeTitles[activeRoute];
+    if (title) document.title = title + ' - ' + SITE_TITLE;
 }
 
 // 移动端菜单控制逻辑
@@ -600,6 +625,7 @@ const SearchSys = {
     
     fuse: null,
     isDataLoaded: false,
+    loading: false,
 
     init() {
         if (!this.triggerBtn) return;
@@ -623,11 +649,11 @@ const SearchSys = {
         this.input.focus();
         document.body.style.overflow = 'hidden';
 
-        if (!this.isDataLoaded) {
+        if (!this.isDataLoaded && !this.loading) {
+            this.loading = true;
             this.resultsArea.innerHTML = '<li style="padding: 16px; text-align: center; color: var(--vp-c-text-3);">正在建立本地索引...</li>';
             try {
-                const res = await fetchApi('search');
-                const rawData = await res.json();
+                const rawData = await fetchApi('search');
                 
                 this.fuse = new Fuse(rawData, {
                     keys: ['title', 'content'],
@@ -638,7 +664,9 @@ const SearchSys = {
                 this.isDataLoaded = true;
                 this.performSearch(this.input.value); 
             } catch (err) {
-                this.resultsArea.innerHTML = '<li style="padding: 16px; color: red;">索引加载失败，请检查 config.js 中 apiEndpoint 的接口地址配置。</li>';
+                this.resultsArea.innerHTML = '<li style="padding: 16px; color: red;">索引加载失败，请检查接口或重新生成索引。关闭后再次打开可重试。</li>';
+            } finally {
+                this.loading = false;
             }
         }
     },
@@ -677,12 +705,15 @@ const SearchSys = {
                 excerpt = (start > 0 ? '...' : '') + item.content.substring(start, end) + '...';
             }
 
-            const highlightedTitle = item.title.replace(regex, '<span class="highlight">$1</span>');
-            const highlightedExcerpt = excerpt.replace(regex, '<span class="highlight">$1</span>');
+            // Escape each text segment before inserting our own highlight markup.
+            const highlight = text => text.split(regex).map((part, i) =>
+                i % 2 ? '<span class="highlight">' + escapeHtml(part) + '</span>' : escapeHtml(part)).join('');
+            const highlightedTitle = highlight(item.title);
+            const highlightedExcerpt = highlight(excerpt);
 
             html += `
                 <li>
-                    <a href="#/${item.route}" onclick="SearchSys.close()">
+                    <a href="${routeHref(item.route)}" onclick="SearchSys.close()">
                         <span class="res-title">${highlightedTitle}</span>
                         <span class="res-excerpt">${highlightedExcerpt}</span>
                     </a>
@@ -695,31 +726,3 @@ const SearchSys = {
 };
 
 SearchSys.init();
-
-
-console.log(`                                                                                                                                
-                                                                                                                                
-KKKKKKKKK    KKKKKKK                                                                                              iiii  lllllll 
-K:::::::K    K:::::K                                                                                             i::::i l:::::l 
-K:::::::K    K:::::K                                                                                              iiii  l:::::l 
-K:::::::K   K::::::K                                                                                                    l:::::l 
-KK::::::K  K:::::KKKnnnn  nnnnnnnn       ooooooooooo wwwwwww           wwwww           wwwwwwwnnnn  nnnnnnnn    iiiiiii  l::::l 
-  K:::::K K:::::K   n:::nn::::::::nn   oo:::::::::::oow:::::w         w:::::w         w:::::w n:::nn::::::::nn  i:::::i  l::::l 
-  K::::::K:::::K    n::::::::::::::nn o:::::::::::::::ow:::::w       w:::::::w       w:::::w  n::::::::::::::nn  i::::i  l::::l 
-  K:::::::::::K     nn:::::::::::::::no:::::ooooo:::::o w:::::w     w:::::::::w     w:::::w   nn:::::::::::::::n i::::i  l::::l 
-  K:::::::::::K       n:::::nnnn:::::no::::o     o::::o  w:::::w   w:::::w:::::w   w:::::w      n:::::nnnn:::::n i::::i  l::::l 
-  K::::::K:::::K      n::::n    n::::no::::o     o::::o   w:::::w w:::::w w:::::w w:::::w       n::::n    n::::n i::::i  l::::l 
-  K:::::K K:::::K     n::::n    n::::no::::o     o::::o    w:::::w:::::w   w:::::w:::::w        n::::n    n::::n i::::i  l::::l 
-KK::::::K  K:::::KKK  n::::n    n::::no::::o     o::::o     w:::::::::w     w:::::::::w         n::::n    n::::n i::::i  l::::l 
-K:::::::K   K::::::K  n::::n    n::::no:::::ooooo:::::o      w:::::::w       w:::::::w          n::::n    n::::ni::::::il::::::l
-K:::::::K    K:::::K  n::::n    n::::no:::::::::::::::o       w:::::w         w:::::w           n::::n    n::::ni::::::il::::::l
-K:::::::K    K:::::K  n::::n    n::::n oo:::::::::::oo         w:::w           w:::w            n::::n    n::::ni::::::il::::::l
-KKKKKKKKK    KKKKKKK  nnnnnn    nnnnnn   ooooooooooo            www             www             nnnnnn    nnnnnniiiiiiiillllllll
-                                                                                                                                
-                                                                                                                                
-                                                                                                                                
-                                                                                                                                
-                                                                                                                                
- 重庆知无科技有限公司 版权所有
- FastMD v1.4.8                                                                                                                               
-                                                                                                                                `);

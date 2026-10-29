@@ -1058,3 +1058,5 @@ svg[id^="dmermaid"] {
         display: none !important;
     }
 }
+/* Pointer capture keeps diagram dragging local to the current page. */
+.mermaid-stage { touch-action: none; }

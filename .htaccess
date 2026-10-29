@@ -1,0 +1,9 @@
+# Apache document-site boundary. PHP routing remains in api/php/.htaccess.
+Options -Indexes
+RewriteEngine On
+RewriteRule (^|/)[._] - [F]
+RewriteRule ^$ - [L]
+RewriteRule ^(?:index\.html|config\.js|api/file/(?:sidebar|search))$ - [L]
+RewriteRule ^api/php(?:/.*)?$ - [L]
+RewriteRule ^(?:assets|docs)/.*\.(?:md|html|css|js|json|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|eot|pdf|txt|mp3|mp4|webm|ogg|wav)$ - [L,NC]
+RewriteRule ^ - [F]

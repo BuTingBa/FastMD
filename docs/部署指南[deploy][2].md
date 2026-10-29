@@ -2,7 +2,11 @@
 
 本系统零构建，后端支持多种部署形态（默认 PHP；也可 Node.js / Python / 纯静态 JSON，见文末「换用其它后端语言」），按需选择：
 
-## 方式一：PHP 内置服务器（开发 / 内网演示）
+## 无运行环境：独立程序（推荐）
+
+Windows 直接运行根目录 `fastmd-windows.exe`；Linux 执行 `chmod +x fastmd-linux` 后运行 `./fastmd-linux`。默认 `0.0.0.0:1120`，通过 `fastmd.json` 配置。每次启动生成索引；运行中修改文档后执行 `build` 更新。完整说明见 [独立程序](#/standalone)。
+
+## PHP 内置服务器
 
 最简方式，适合本地开发或内网快速演示：
 
@@ -13,7 +17,7 @@ php -S 0.0.0.0:8000
 访问 `http://服务器IP:8000/` 即可。
 
 ::: tip 路由说明
-内置服务器不解析 `.htaccess`，路径式请求 `api/php/sidebar` 会 404，前端自动回退到 `?action=sidebar` 查询参数方式，功能完全一致，无需处理。
+内置服务器不解析 `.htaccess`。不同 PHP 版本的路径处理不同；路径式不可用时，前端自动回退到 `?action=sidebar`，无需处理。此方式不提供项目中的静态资源访问限制，仅用于本地开发。
 :::
 
 ## 方式二：Nginx + PHP-FPM（生产推荐）
@@ -30,21 +34,30 @@ server {
     index        index.html index.php;
 
     # PHP 接口
-    location ~ \.php$ {
+    location = /api/php/index.php {
         fastcgi_pass   unix:/run/php/php8.1-fpm.sock;
         fastcgi_index  index.php;
         include        fastcgi_params;
         fastcgi_param  SCRIPT_FILENAME $document_root$fastcgi_script_name;
     }
 
-    # 后端路径路由：/api/php/sidebar 等回退到 api/php/index.php（PATH_INFO 分发）
+    # 隐藏文件与草稿、源码和运行配置不公开
+    location ~ (^|/)[._] { return 404; }
+    location = /fastmd.json { return 404; }
+    location = /fastmd-linux { return 404; }
+    location = /SHA256SUMS { return 404; }
+    location ~ ^/(tests|api/go|api/nodejs|api/python)/ { return 404; }
+    location ~ \.(exe|go|py|sh|ps1|sum|mod)$ { return 404; }
+    location ~ \.php(?:/|$) { return 404; }
+
+    # 路径回退；PHP 可以从 REQUEST_URI 恢复 sidebar/search
     location /api/php/ {
         try_files $uri $uri/ /api/php/index.php?$query_string;
     }
 
-    # 静态资源与 SPA 入口
+    # Hash 路由无需把未知文件回退成 HTML
     location / {
-        try_files $uri $uri/ /index.html;
+        try_files $uri $uri/ =404;
     }
 }
 ```
@@ -53,20 +66,16 @@ server {
 
 ## 方式三：Apache
 
-项目根目录新建 `.htaccess`（SPA 入口回退）：
+项目根目录已提供 `.htaccess` 限定公开资源；接口目录保留自己的回退规则。无需添加全站 SPA 回退，以下是隐藏文件和目录列表的基础规则：
 
 ```apache
-<IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteCond %{REQUEST_FILENAME} !-f
-    RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule ^ index.html [L]
-</IfModule>
+Options -Indexes
+RedirectMatch 404 (^|/)[._]
 ```
 
 确保 Apache 已启用 `mod_rewrite` 与 PHP 解析，且虚拟主机配置 `AllowOverride All`（允许读取 .htaccess）。
 
-后端路由无需额外配置：`api/php/.htaccess`（`FallbackResource index.php`）已内置，`/api/php/sidebar`、`/api/php/search` 路径会自动回退到 `api/php/index.php` 并按 `PATH_INFO` 分发。
+`api/php/.htaccess`（`FallbackResource index.php`）已内置，路径回退到 PHP 后按 `PATH_INFO` 或原始请求路径分发。Apache 需允许读取 `.htaccess`，以及所用的 Rewrite/Options 指令；否则可使用独立程序。
 
 ## 部署到子目录
 

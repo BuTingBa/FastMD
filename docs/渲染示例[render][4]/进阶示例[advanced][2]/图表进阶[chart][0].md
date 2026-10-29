@@ -86,4 +86,4 @@ flowchart LR
 
 > 上述代码使用了错误的箭头语法（`->>` 应为 `-->`），渲染时会显示为带红色虚线边框的代码块，便于作者定位问题。
 
-继续阅读 [公式进阶](#/advanced/formula)。
+继续阅读 [公式进阶](#/render/advanced/formula)。

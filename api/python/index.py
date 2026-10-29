@@ -1,219 +1,162 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-api/python/index.py —— FastMD 后端入口（Python 3 标准库实现，零依赖）
-与 api/php/index.php 协议完全一致（路径式路由为推荐协议，查询参数式向后兼容）：
-  GET /sidebar -> 目录树 JSON：{"data": [...]}
-  GET /search  -> 搜索索引 JSON：[{...}, ...]
-  GET ?action=sidebar / ?action=search（查询参数式，同样支持）
-
-除 /sidebar、/search 路由外的其它路径一律按静态文件处理（根目录为项目根），
-因此本服务可独立托管整站：api 目录下的文件也能以目录方式直接访问。
-
-启动方式：
-  python api/python/index.py            # 默认监听 127.0.0.1:8300，可直接当整站服务器
-  PORT=9000 python api/python/index.py  # 自定义端口（Windows: set PORT=9000）
-
-与前端联调（两种用法）：
-  1. 独立整站：浏览器直接访问 http://127.0.0.1:8300/ ，config.js 无需修改
-  2. 仅当接口：将 config.js 的 apiEndpoint 改为 "http://127.0.0.1:8300"
-     （本服务已开启 CORS，允许跨域调用）
-"""
-
+"""Zero-dependency document API and restricted static server (Python 3.7+)."""
 import json
 import os
 import re
 import sys
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
-PORT = int(os.environ.get('PORT', '8300'))
-HOST = os.environ.get('HOST', '127.0.0.1')
-# 静态服务根目录 = 项目根（本文件位于 <root>/api/python/，取上两级）
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, os.pardir))
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DOCS_DIR = os.path.join(ROOT_DIR, 'docs')
-
-# ============================ 公共函数 ============================
-
-# 「标题[路由][排序]」命名规范
-NAME_PATTERN = re.compile(r'^([^[\]]+)(?:\[([^[\]]+)\])?(?:\[(\d+)\])?$')
-# 剔除 HTML 标签（与 PHP strip_tags 行为对齐的简化实现）
-HTML_TAG = re.compile(r'<[^>]*>')
-WHITESPACE = re.compile(r'\s+')
+NAME_PATTERN = re.compile(r'^([^\[\]]+)(?:\[([^\[\]]*)\])?(?:\[(\d+)\])?$')
+PUBLIC_EXTENSIONS = set('.md .html .css .js .json .svg .png .jpg .jpeg .gif .webp .avif .ico .woff .woff2 .ttf .eot .pdf .txt .mp3 .mp4 .webm .ogg .wav'.split())
 
 
 def parse_file_name(filename, is_file):
-    """解析「标题[路由][排序]」，返回 (标题, 路由, 排序或 None)"""
-    name = filename
-    if is_file:
-        dot = name.rfind('.')
-        if dot != -1:
-            name = name[:dot]
-    m = NAME_PATTERN.match(name)
-    if not m:
+    name = filename.rsplit('.', 1)[0] if is_file else filename
+    match = NAME_PATTERN.fullmatch(name)
+    if not match:
         return name, name, None
-    title = m.group(1).strip()
-    route = m.group(2).strip() if m.group(2) else title
-    sort = int(m.group(3)) if m.group(3) is not None else None
-    return title, route, sort
+    title = match[1].strip()
+    return title, (match[2] or '').strip() or title, int(match[3]) if match[3] else None
 
 
-def is_ignored(name):
-    """忽略隐藏文件（. 开头）与辅助文档（_ 开头）"""
-    return name.startswith('.') or name.startswith('_')
-
-
-def is_markdown(name):
-    """文件是否为 markdown（字节级判断扩展名）"""
-    dot = name.rfind('.')
-    return dot != -1 and name[dot + 1:] == 'md'
-
-# ============================ 目录树扫描 ============================
-
-
-def scan_docs(dir_path, parent_route='', parent_path=''):
+def scan_docs(directory=DOCS_DIR, parent_route='', parent_path='', seen=None):
     result = []
-    try:
-        items = os.listdir(dir_path)
-    except OSError:
+    if seen is None:
+        seen = set()
+    if not os.path.isdir(directory):
         return result
-
-    for item in items:
-        if is_ignored(item):
+    for name in sorted(os.listdir(directory)):
+        if name.startswith(('.', '_')):
             continue
-
-        full_path = os.path.join(dir_path, item)
-        current_path = parent_path + '/' + item if parent_path else item
-
-        if os.path.islink(full_path):
+        path = os.path.join(directory, name)
+        if os.path.islink(path):
             continue
-        is_file = os.path.isfile(full_path)
-
-        if is_file and not is_markdown(item):
+        is_dir = os.path.isdir(path)
+        if not is_dir and (not os.path.isfile(path) or not name.endswith('.md')):
             continue
-
-        title, route, sort = parse_file_name(item, is_file)
+        title, route, weight = parse_file_name(name, not is_dir)
+        if not route or route in ('.', '..') or re.search(r'[/\\#?\x00\r\n\t]', route):
+            raise ValueError('Invalid route: ' + name)
         full_route = parent_route + '/' + route if parent_route else route
-        sort_weight = sort if sort is not None else int(os.path.getmtime(full_path))
-
-        if os.path.isdir(full_path):
-            children = scan_docs(full_path, full_route, current_path)
-            if children:
-                result.append({
-                    'type': 'dir', 'title': title, 'route': route,
-                    'fullRoute': full_route, 'sortWeight': sort_weight,
-                    'children': children,
-                })
-        else:
-            result.append({
-                'type': 'file', 'title': title, 'route': route,
-                'fullRoute': full_route, 'actualPath': current_path,
-                'sortWeight': sort_weight,
-            })
-
-    result.sort(key=lambda x: x['sortWeight'])
-    return result
-
-# ============================ 搜索索引构建 ============================
-
-
-def build_search_index(dir_path, parent_route=''):
-    result = []
-    try:
-        items = os.listdir(dir_path)
-    except OSError:
-        return result
-
-    for item in items:
-        if is_ignored(item):
-            continue
-
-        full_path = os.path.join(dir_path, item)
-
-        if os.path.islink(full_path):
-            continue
-        is_file = os.path.isfile(full_path)
-
-        if is_file and not is_markdown(item):
-            continue
-
-        title, route, _ = parse_file_name(item, is_file)
-        full_route = parent_route + '/' + route if parent_route else route
-
-        if os.path.isdir(full_path):
-            result.extend(build_search_index(full_path, full_route))
-        else:
-            try:
-                with open(full_path, 'r', encoding='utf-8', errors='ignore') as f:
-                    content = f.read()
-            except OSError:
+        if full_route in seen:
+            raise ValueError('Duplicate route: ' + full_route)
+        seen.add(full_route)
+        actual_path = parent_path + '/' + name if parent_path else name
+        node = {'type': 'dir' if is_dir else 'file', 'title': title, 'route': route,
+                'fullRoute': full_route, 'sortWeight': weight if weight is not None else int(os.path.getmtime(path))}
+        if is_dir:
+            node['children'] = scan_docs(path, full_route, actual_path, seen)
+            if not node['children']:
                 continue
-            # 极简清理：压缩空白、剔除 HTML 标签（与 PHP 版行为一致）
-            content = HTML_TAG.sub('', WHITESPACE.sub(' ', content))
-            result.append({
-                'title': title, 'route': full_route,
-                'content': content[:20000],
-            })
-    return result
+        else:
+            node['actualPath'] = actual_path
+        result.append(node)
+    return sorted(result, key=lambda node: (node['sortWeight'], node['fullRoute']))
 
-# ============================ HTTP 服务 ============================
+
+def build_search_index(tree):
+    result = []
+    for item in tree:
+        if item['type'] == 'dir':
+            result.extend(build_search_index(item['children']))
+        else:
+            with open(os.path.join(DOCS_DIR, item['actualPath']), encoding='utf-8') as source:
+                text = re.sub(r'[ \t\r\n\f\v]+', ' ', source.read())
+            result.append({'title': item['title'], 'route': item['fullRoute'], 'content': text[:20000]})
+    return sorted(result, key=lambda item: item['route'])
+
+
+def public_path(name):
+    parts = name.split('/')
+    if any(not part or part.startswith(('.', '_')) or re.search(r'[\\:\x00]', part) for part in parts):
+        return False
+    if name in ('index.html', 'config.js', 'api/file/sidebar', 'api/file/search'):
+        return True
+    return len(parts) > 1 and parts[0] in ('docs', 'assets') and os.path.splitext(name)[1].lower() in PUBLIC_EXTENSIONS
 
 
 class Handler(SimpleHTTPRequestHandler):
-    """API 路由 + 静态文件服务（静态部分复用标准库，根目录 = 项目根）"""
-
     def do_GET(self):
-        parsed = urlparse(self.path)
+        self.handle_read()
 
-        # 路由解析（优先级：?action= 查询参数 > /sidebar|/search 路径 > 静态文件）
-        query_action = (parse_qs(parsed.query).get('action') or [''])[0]
-        if query_action:
-            return self.send_api(query_action)
+    def do_HEAD(self):
+        self.handle_read()
 
-        route = parsed.path.strip('/')
-        if route in ('sidebar', 'search'):
-            return self.send_api(route)
+    def handle_read(self):
+        try:
+            parsed = urlparse(self.path)
+            if re.search(r'%(?![0-9a-fA-F]{2})', parsed.path):
+                return self.send_error(400, 'Invalid URL encoding')
+            name = unquote(parsed.path, errors='strict').lstrip('/') or 'index.html'
+            action = name if name in ('sidebar', 'search') else ''
+            if name in ('api/php/sidebar', 'api/php/search'):
+                action = name.rsplit('/', 1)[1]
+            if name in ('index.html', 'api/php', 'api/php/', 'api/php/index.php'):
+                action = (parse_qs(parsed.query).get('action') or [action])[0]
+            if action:
+                if action not in ('sidebar', 'search'):
+                    return self.send_json(404, {'error': 'Unknown action'})
+                tree = scan_docs()
+                return self.send_json(200, {'data': tree} if action == 'sidebar' else build_search_index(tree))
+            if not public_path(name):
+                return self.send_error(404)
+            path = ROOT_DIR
+            for part in name.split('/'):
+                path = os.path.join(path, part)
+                if os.path.islink(path):
+                    return self.send_error(404)
+            if not os.path.isfile(path):
+                return self.send_error(404)
+            if name.startswith(('docs/', 'api/file/')):
+                # Avoid false 304 responses after a same-second document rebuild.
+                del self.headers['If-Modified-Since']
+            if self.command == 'HEAD':
+                super().do_HEAD()
+            else:
+                super().do_GET()
+        except UnicodeError:
+            self.send_error(400, 'Invalid UTF-8')
+        except (OSError, ValueError) as error:
+            self.log_error('%s', error)
+            self.send_json(500, {'error': 'Cannot build document index; check server log'})
 
-        super().do_GET()
-
-    def send_api(self, action):
-        """按 action 名输出对应 API 数据（CORS 头由 end_headers 统一添加）"""
-        if action == 'search':
-            payload = build_search_index(DOCS_DIR) if os.path.isdir(DOCS_DIR) else []
-        elif action == 'sidebar':
-            payload = {'data': scan_docs(DOCS_DIR)} if os.path.isdir(DOCS_DIR) else {'data': []}
-        else:
-            self.send_response(404)
-            self.send_header('Content-Type', 'application/json; charset=utf-8')
-            self.end_headers()
-            self.wfile.write(json.dumps(
-                {'error': 'unknown action: %s' % action}, ensure_ascii=False).encode('utf-8'))
-            return
-
-        self.send_response(200)
+    def send_json(self, status, value):
+        data = json.dumps(value, ensure_ascii=False).encode('utf-8')
+        self.send_response(status)
         self.send_header('Content-Type', 'application/json; charset=utf-8')
+        self.send_header('Content-Length', str(len(data)))
         self.end_headers()
-        self.wfile.write(json.dumps(payload, ensure_ascii=False).encode('utf-8'))
+        if self.command != 'HEAD':
+            self.wfile.write(data)
+
+    def guess_type(self, path):
+        if path.endswith(('/sidebar', '/search')):
+            return 'application/json; charset=utf-8'
+        if path.endswith('.md'):
+            return 'text/plain; charset=utf-8'
+        return super().guess_type(path)
 
     def end_headers(self):
-        # 统一 CORS，便于前端跨域联调（静态响应也带上）
         self.send_header('Access-Control-Allow-Origin', '*')
+        self.send_header('Cache-Control', 'no-cache')
+        self.send_header('X-Content-Type-Options', 'nosniff')
         super().end_headers()
-
-    def log_message(self, fmt, *args):
-        sys.stderr.write('[FastMD] %s\n' % (fmt % args))
 
 
 def main():
-    server = ThreadingHTTPServer((HOST, PORT), partial(Handler, directory=ROOT_DIR))
-    print('FastMD Python backend listening at http://%s:%s/' % (HOST, PORT))
-    print('docs dir: %s' % DOCS_DIR)
-    print('API routes: /sidebar, /search (legacy: ?action=...)')
+    host, port = os.environ.get('HOST', '127.0.0.1'), int(os.environ.get('PORT', '8300'))
+    server = ThreadingHTTPServer((host, port), partial(Handler, directory=ROOT_DIR))
+    print('FastMD: http://%s:%s/' % (host, port))
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        server.shutdown()
+        pass
+    finally:
+        server.server_close()
 
 
 if __name__ == '__main__':

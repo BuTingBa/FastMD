@@ -1,6 +1,6 @@
 # 配置与服务接口
 
-FastMD 的所有可配置项集中在一个文件：根目录 `config.js`。修改后刷新浏览器即可生效，无需重启服务。本文同时说明后端接口协议、静态 JSON 方案，以及如何用任意编程语言替换默认的 PHP 后端。
+页面标题与接口地址在根目录 `config.js`，修改后刷新浏览器。独立程序的监听 IP、端口和域名限制在 `fastmd.json`，修改后重启服务。本文说明接口协议、静态 JSON 方案和不同后端的切换。
 
 ## config.js 配置说明
 
@@ -58,7 +58,7 @@ apiEndpoint: "http://127.0.0.1:8300"
 - `GET {apiEndpoint}/search` —— 搜索索引
 
 ::: info 查询参数兼容
-前端路径式请求失败（404 / 网络错误）时会自动回退到查询参数方式 `{apiEndpoint}?action=sidebar|search` 重试。
+前端路径式请求失败（HTTP 错误、网络错误或 JSON 结构不符合约定）时，会回退到查询参数方式 `{apiEndpoint}?action=sidebar|search` 重试。
 三种动态后端实现两种方式都支持；自定义后端只需实现路径式一种即可。
 :::
 
@@ -109,7 +109,7 @@ apiEndpoint: "http://127.0.0.1:8300"
   {
     "title": "项目介绍",
     "route": "home",
-    "content": "文档正文纯文本（已压缩空白、剔除 HTML 标签，单篇最长 20000 字符）"
+    "content": "压缩空白后的 Markdown 正文与代码，单篇最长 20000 个 Unicode 字符"
   }
 ]
 ```
@@ -121,6 +121,8 @@ apiEndpoint: "http://127.0.0.1:8300"
 - 扫描根目录为项目下的 `docs/`，递归处理子目录
 - 忽略 `.` 开头（隐藏）与 `_` 开头（辅助文档）的文件/目录
 - 仅收录 `.md` 文件
+- 跳过符号链接；重复完整路由或无效路由报错，不静默覆盖
+- 搜索保留代码与 Markdown，显示摘要时由前端转义 HTML
 - 文件命名规范：`标题[路由][排序].md`，目录为 `标题[路由][排序]`，详见 [命名规则](#/naming)
 - 同级按 `sortWeight` 升序排列
 
@@ -137,9 +139,13 @@ api 目录按语言分目录组织，每个目录以 `index` 作为默认入口�
 
 三种动态实现协议完全一致（Node/Python 版已内置 CORS 头，可直接跨域联调）。
 
-### PHP 目录入口说明
+### Go 独立程序
 
-`apiEndpoint: "api/php"` 时，`/sidebar`、`/search` 路径需由服务器回退到 `api/php/index.php` 并通过 `PATH_INFO` 分发：
+根目录 `fastmd-windows.exe` / `fastmd-linux` 默认启动服务；追加 `build` 只生成索引后退出。服务监听配置在 `fastmd.json`，默认 `0.0.0.0:1120`。兼容默认 `api/php` 地址，详见 [独立程序](#/standalone)。
+
+### PHP 路径分发
+
+`apiEndpoint: "api/php"` 时，`/sidebar`、`/search` 路径由服务器回退到 `api/php/index.php`，根据 `PATH_INFO` 或原始请求路径分发：
 
 - **Apache**：已内置 `api/php/.htaccess`（`FallbackResource index.php`），上传即用
 - **nginx**：加一条 `location /api/php/ { try_files $uri $uri/ /api/php/index.php?$query_string; }`
@@ -160,7 +166,7 @@ api/file/search    # 搜索索引 JSON（同 GET /search 的返回结构）
 
 把 `config.js` 的 `apiEndpoint` 改为 `"api/file"`，前端请求 `api/file/sidebar`、`api/file/search` 时会被静态服务器直接命中文件——整个站点变成纯静态站点，可部署到 GitHub Pages、对象存储等任何静态托管。
 
-仓库内已附带一份基于当前 `docs/` 生成的演示数据。文档更新后重新生成：
+仓库内附带当前 `docs/` 的索引。文档更新后推荐运行独立程序的 `build` 命令，无需 PHP；也可以导出动态接口：
 
 ```bash
 # 用任一官方后端导出（以 PHP 为例）

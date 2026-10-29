@@ -35,7 +35,7 @@
     <link href="assets/vendor/katex@0.16.9/dist/katex.min.css" rel="stylesheet">
     <link href="assets/vendor/prismjs@1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
     <link rel="stylesheet" href="assets/font/iconfont.css">
-    <link rel="stylesheet" href="assets/main.css?v=202609080214">
+    <link rel="stylesheet" href="assets/main.css?v=1.7.0">
     <!-- 内联：隐藏 mermaid 10.x 渲染失败时的错误 SVG（限 svg 元素，避免误伤临时测量 div） -->
     <style>svg[id^="dmermaid"]{display:none!important}</style>
 </head>
@@ -181,54 +181,11 @@
     <script src="assets/vendor/markdown-it-texmath@1.0.0/texmath.min.js"></script>
     <!-- markdown-it-container：支持 Vitepress 风格容器块 ::: tip/info/warning/danger -->
     <script src="assets/vendor/markdown-it-container@3.0.0/dist/markdown-it-container.min.js"></script>
-    <!-- Mermaid：用于渲染流程图/时序图/类图/甘特图/饼图/状态图等图表 -->
-    <script src="assets/vendor/mermaid@10.9.1/dist/mermaid.min.js"></script>
-
-    <!-- 全局配置（站点标题 / 后端接口地址），必须在 main.js 之前引入 -->
-    <script src="config.js?v=202609081442"></script>
-    <script>
-        /**
-         * ================= 框架内部全局变量（一般无需修改，配置请改 config.js） =================
-         * 供 assets/main.js / assets/app.js 全局引用。必须先于 main.js 加载。
-         */
-
-        // 站点标题（main.js 中页面标题后缀使用）
-        window.SITE_TITLE = window.FASTMD_CONFIG.siteTitle || 'FastMD';
-
-        // 后端接口地址
-        window.API_ENDPOINT = window.FASTMD_CONFIG.apiEndpoint || 'api/php';
-
-        /**
-         * 拼接后端接口地址：apiEndpoint + '/sidebar' 或 '/search'（路径式路由）
-         * - 自动去掉末尾斜杠："http://host:8300/" → "http://host:8300/sidebar"
-         * - 接口地址自带查询参数时（如 "http://host/api?token=1"），
-         *   路径已不可追加，退回查询参数方式 &action=xxx
-         */
-        window.apiUrl = function (action) {
-            var ep = window.API_ENDPOINT;
-            if (ep.indexOf('?') !== -1) {
-                return ep + '&action=' + action;
-            }
-            return ep.replace(/\/+$/, '') + '/' + action;
-        };
-
-        /**
-         * 发起后端 API 请求：路径式（/sidebar、/search）优先，
-         * 失败（404/网络错误）时自动回退查询参数方式（?action=xxx）。
-         * 兼容不支持 PATH_INFO 的服务器（如未配置 rewrite 的 nginx、php -S 内置服务器）；
-         * 静态 JSON 方案（api/file/）由静态服务器直接命中文件，不走回退。
-         */
-        window.fetchApi = async function (action) {
-            try {
-                const res = await fetch(window.apiUrl(action));
-                if (res.ok) return res;
-            } catch (e) { /* 落入下方查询参数重试 */ }
-            return fetch(window.API_ENDPOINT + (window.API_ENDPOINT.indexOf('?') !== -1 ? '&' : '?') + 'action=' + action);
-        };
-    </script>
-    <script src="assets/main.js?v=202609081423"></script>
+    <script src="config.js?v=1.7.0"></script>
+    <script src="assets/runtime.js?v=1.7.0"></script>
+    <script src="assets/main.js?v=1.7.0"></script>
     <!-- 应用启动入口（markdown 引擎装配 + 配置应用 + 启动），依赖 config.js 与 main.js -->
-    <script src="assets/app.js?v=202609081231"></script>
+    <script src="assets/app.js?v=1.7.0"></script>
 </body>
 
 </html>

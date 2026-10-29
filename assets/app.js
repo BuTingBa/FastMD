@@ -72,6 +72,8 @@ window.addEventListener('hashchange', loadContent);
 // 必须在 DOM 对象定义之后调用，因为内部依赖 DOM.sidebar 等引用
 LayoutCtrl.init();
 
-initTree().then(() => loadContent()).finally(hideAppLoader);
+initTree().then(() => loadContent()).catch(() => {
+    DOM.content.textContent = '文档目录暂时不可用，请点击左侧重新加载。';
+}).finally(hideAppLoader);
 // 兜底：极端情况下（接口超时等）8 秒后强制隐藏进度条，避免页面卡在加载态
 setTimeout(hideAppLoader, 8000);

@@ -59,7 +59,7 @@ window.routeMap = {
 
 ### 3. 全文搜索（`SearchSys`）
 
-首次唤起搜索框时拉取后端接口（`/search`），后端聚合所有文档纯文本返回 JSON 数组。前端用 Fuse.js 建立模糊匹配索引，搜索时支持关键词高亮与摘要截取。
+首次唤起搜索框时拉取后端接口（`/search`），后端保留 Markdown 与代码、压缩空白后返回 JSON 数组。前端用 Fuse.js 建立模糊匹配索引，搜索时支持关键词高亮与摘要截取，显示摘要前转义 HTML。刷新浏览器可获取更新后的索引。
 
 ## 后端扩展
 
@@ -68,13 +68,13 @@ window.routeMap = {
 当前正则位于 `api/php/index.php`（Node/Python 版结构相同）：
 
 ```php
-preg_match('/^([^\[\]]+)(?:\[([^\[\]]+)\])?(?:\[(\d+)\])?$/', $nameWithoutExt, $matches);
+preg_match('/^([^\[\]]+)(?:\[([^\[\]]*)\])?(?:\[(\d+)\])?$/', $nameWithoutExt, $matches);
 ```
 
 如需扩展第四个维度（如图标），改为：
 
 ```php
-preg_match('/^([^\[\]]+)(?:\[([^\[\]]+)\])?(?:\[(\d+)\])?(?:\[(icon-[a-z]+)\])?$/', $nameWithoutExt, $matches);
+preg_match('/^([^\[\]]+)(?:\[([^\[\]]*)\])?(?:\[(\d+)\])?(?:\[(icon-[a-z]+)\])?$/', $nameWithoutExt, $matches);
 ```
 
 然后在返回数组中加 `icon` 字段，前端 `renderSidebar` 拼接对应 HTML 即可。
@@ -87,6 +87,12 @@ preg_match('/^([^\[\]]+)(?:\[([^\[\]]+)\])?(?:\[(\d+)\])?(?:\[(icon-[a-z]+)\])?$
 2. **剔除代码块**：用正则去掉 ```` ``` ```` 内的内容，专注索引人类语言，可压缩 60% 体积。
 
 ## 前端扩展
+
+### 公共请求与页面生命周期
+
+`assets/runtime.js` 集中配置、接口请求与结构校验、HTML 转义和脚本按需加载。`main.js` 使用 AbortController 与页面序号，防止旧正文覆盖新路由。Mermaid 任务串行执行，只在需要图表时加载本地库；拖动使用 Pointer Events，不向 document 累积监听器。
+
+Markdown 原生 HTML 保留以兼容可信文档；这不是不可信上传内容的沙箱。Mermaid 使用 strict 模式。
 
 ### 新增代码高亮语言
 

@@ -1,252 +1,133 @@
 #!/usr/bin/env node
-/**
- * api/nodejs/index.js —— FastMD 后端入口（Node.js 实现，零依赖）
- * 与 api/php/index.php 协议完全一致（路径式路由为推荐协议，查询参数式向后兼容）：
- *   GET /sidebar → 目录树 JSON：{"data": [...]}
- *   GET /search  → 搜索索引 JSON：[{...}, ...]
- *   GET ?action=sidebar / ?action=search（查询参数式，同样支持）
- *
- * 除 /sidebar、/search 路由外的其它路径一律按静态文件处理（根目录为项目根），
- * 因此本服务可独立托管整站：api 目录下的文件也能以目录方式直接访问。
- *
- * 启动方式：
- *   node api/nodejs/index.js            # 默认监听 127.0.0.1:8300，可直接当整站服务器
- *   PORT=9000 node api/nodejs/index.js  # 自定义端口（Windows: set PORT=9000）
- *
- * 与前端联调（两种用法）：
- *   1. 独立整站：浏览器直接访问 http://127.0.0.1:8300/ ，config.js 无需修改
- *   2. 仅当接口：将 config.js 的 apiEndpoint 改为 "http://127.0.0.1:8300"
- *      （本服务已开启 CORS，允许跨域调用）
- */
-
 'use strict';
 
+// Zero-dependency dynamic backend; only document-site resources are public.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-
+const ROOT_DIR = path.resolve(__dirname, '..', '..');
+const DOCS_DIR = path.join(ROOT_DIR, 'docs');
 const PORT = process.env.PORT || 8300;
 const HOST = process.env.HOST || '127.0.0.1';
-// 静态服务根目录 = 项目根（本文件位于 <root>/api/nodejs/，取上两级）
-const ROOT_DIR = path.join(__dirname, '..', '..');
-const DOCS_DIR = path.join(ROOT_DIR, 'docs');
-
-// 常见静态资源 MIME 类型
+const NAME_PATTERN = /^([^\[\]]+)(?:\[([^\[\]]*)\])?(?:\[(\d+)\])?$/;
 const MIME = {
-    '.html': 'text/html; charset=utf-8',
-    '.css': 'text/css; charset=utf-8',
-    '.js': 'application/javascript; charset=utf-8',
-    '.json': 'application/json; charset=utf-8',
-    '.md': 'text/markdown; charset=utf-8',
-    '.svg': 'image/svg+xml',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.ico': 'image/x-icon',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-    '.ttf': 'font/ttf',
-    '.eot': 'application/vnd.ms-fontobject',
-    '.txt': 'text/plain; charset=utf-8'
+    '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
+    '.js': 'application/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8',
+    '.md': 'text/plain; charset=utf-8', '.txt': 'text/plain; charset=utf-8',
+    '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
+    '.gif': 'image/gif', '.webp': 'image/webp', '.avif': 'image/avif', '.ico': 'image/x-icon',
+    '.woff': 'font/woff', '.woff2': 'font/woff2', '.ttf': 'font/ttf', '.eot': 'application/vnd.ms-fontobject',
+    '.pdf': 'application/pdf', '.mp3': 'audio/mpeg', '.mp4': 'video/mp4', '.webm': 'video/webm',
+    '.ogg': 'audio/ogg', '.wav': 'audio/wav'
 };
+const compare = (a, b) => Buffer.compare(Buffer.from(a), Buffer.from(b));
 
-// ============================ 公共函数 ============================
-
-/**
- * 解析文件名「标题[路由][排序]」，返回 [标题, 路由, 排序(可为 null)]
- */
 function parseFileName(filename, isFile) {
-    let name = filename;
-    if (isFile) {
-        const dot = name.lastIndexOf('.');
-        if (dot !== -1) name = name.slice(0, dot);
-    }
-    const m = name.match(/^([^[\]]+)(?:\[([^[\]]+)\])?(?:\[(\d+)\])?$/);
-    if (!m) return [name, name, null];
-    const title = m[1].trim();
-    const route = m[2] ? m[2].trim() : title;
-    const sort = (m[3] !== undefined && m[3] !== '') ? parseInt(m[3], 10) : null;
-    return [title, route, sort];
+    const name = isFile ? filename.slice(0, filename.lastIndexOf('.')) : filename;
+    const match = name.match(NAME_PATTERN);
+    if (!match) return [name, name, null];
+    const title = match[1].trim();
+    return [title, (match[2] || '').trim() || title, match[3] === undefined ? null : Number(match[3])];
 }
 
-/** 忽略隐藏文件（. 开头）与辅助文档（_ 开头） */
-function isIgnored(name) {
-    return name.startsWith('.') || name.startsWith('_');
-}
-
-/** 文件是否为 markdown（字节级判断扩展名） */
-function isMarkdown(name) {
-    const dot = name.lastIndexOf('.');
-    return dot !== -1 && name.slice(dot + 1) === 'md';
-}
-
-// ============================ 目录树扫描 ============================
-
-function scanDocs(dir, parentRoute, parentPath) {
+function scanDocs(dir = DOCS_DIR, parentRoute = '', parentPath = '', seen = new Set()) {
     const result = [];
-    let items;
-    try {
-        items = fs.readdirSync(dir);
-    } catch (e) {
-        return result;
-    }
-
-    for (const item of items) {
-        if (isIgnored(item)) continue;
-
-        const fullPath = path.join(dir, item);
-        const currentPath = parentPath ? parentPath + '/' + item : item;
-
-        let stat;
-        try {
-            stat = fs.statSync(fullPath);
-        } catch (e) {
-            continue;
+    if (!fs.existsSync(dir)) return result;
+    for (const name of fs.readdirSync(dir)) {
+        if (/^[._]/.test(name)) continue;
+        const filePath = path.join(dir, name);
+        const stat = fs.lstatSync(filePath);
+        if (stat.isSymbolicLink() || (!stat.isDirectory() && (!stat.isFile() || path.extname(name) !== '.md'))) continue;
+        const [title, route, sort] = parseFileName(name, stat.isFile());
+        if (!route || route === '.' || route === '..' || /[/\\#?\x00\r\n\t]/.test(route)) {
+            throw new Error('Invalid route: ' + name);
         }
-        const isFile = stat.isFile();
-
-        if (isFile && !isMarkdown(item)) continue;
-
-        const [title, route, sort] = parseFileName(item, isFile);
         const fullRoute = parentRoute ? parentRoute + '/' + route : route;
-        const sortWeight = sort !== null ? sort : Math.floor(stat.mtimeMs / 1000);
-
+        if (seen.has(fullRoute)) throw new Error('Duplicate route: ' + fullRoute);
+        seen.add(fullRoute);
+        const actualPath = parentPath ? parentPath + '/' + name : name;
+        const node = { type: stat.isDirectory() ? 'dir' : 'file', title, route, fullRoute,
+            sortWeight: sort === null ? Math.floor(stat.mtimeMs / 1000) : sort };
         if (stat.isDirectory()) {
-            const children = scanDocs(fullPath, fullRoute, currentPath);
-            if (children.length > 0) {
-                result.push({ type: 'dir', title, route, fullRoute, sortWeight, children });
-            }
+            node.children = scanDocs(filePath, fullRoute, actualPath, seen);
+            if (!node.children.length) continue;
         } else {
-            result.push({ type: 'file', title, route, fullRoute, actualPath: currentPath, sortWeight });
+            node.actualPath = actualPath;
         }
+        result.push(node);
     }
-
-    result.sort((a, b) => a.sortWeight - b.sortWeight);
-    return result;
+    return result.sort((a, b) => a.sortWeight - b.sortWeight || compare(a.fullRoute, b.fullRoute));
 }
 
-// ============================ 搜索索引构建 ============================
-
-function buildSearchIndex(dir, parentRoute) {
+function buildSearchIndex(tree) {
     const result = [];
-    let items;
-    try {
-        items = fs.readdirSync(dir);
-    } catch (e) {
-        return result;
-    }
-
-    for (const item of items) {
-        if (isIgnored(item)) continue;
-
-        const fullPath = path.join(dir, item);
-
-        let stat;
-        try {
-            stat = fs.statSync(fullPath);
-        } catch (e) {
-            continue;
-        }
-
-        if (stat.isFile() && !isMarkdown(item)) continue;
-
-        const [title, route] = parseFileName(item, stat.isFile());
-        const fullRoute = parentRoute ? parentRoute + '/' + route : route;
-
-        if (stat.isDirectory()) {
-            result.push(...buildSearchIndex(fullPath, fullRoute));
-        } else {
-            let content;
-            try {
-                content = fs.readFileSync(fullPath, 'utf8');
-            } catch (e) {
-                continue;
-            }
-            // 极简清理：压缩空白、剔除 HTML 标签（与 PHP 版行为一致）
-            content = content.replace(/\s+/g, ' ').replace(/<[^>]*>/g, '');
-            result.push({ title, route: fullRoute, content: content.slice(0, 20000) });
+    for (const item of tree) {
+        if (item.type === 'dir') result.push(...buildSearchIndex(item.children));
+        else {
+            // Preserve code examples and markup; the frontend escapes displayed excerpts.
+            const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(fs.readFileSync(path.join(DOCS_DIR, item.actualPath))).replace(/[ \t\r\n\f\v]+/g, ' ');
+            result.push({ title: item.title, route: item.fullRoute, content: Array.from(text).slice(0, 20000).join('') });
         }
     }
-    return result;
+    return result.sort((a, b) => compare(a.route, b.route));
 }
 
-// ============================ HTTP 服务 ============================
-
-/** 输出 JSON（API 响应统一走这里） */
-function sendJson(res, statusCode, payload) {
-    res.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8' });
-    res.end(JSON.stringify(payload));
+function sendJson(req, res, code, value) {
+    res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
+    res.end(req.method === 'HEAD' ? undefined : JSON.stringify(value));
 }
 
-/** 按 action 名输出对应 API 数据 */
-function sendAction(res, action) {
-    let payload;
-    if (!fs.existsSync(DOCS_DIR)) {
-        payload = action === 'search' ? [] : { data: [] };
-    } else if (action === 'search') {
-        payload = buildSearchIndex(DOCS_DIR, '');
-    } else if (action === 'sidebar') {
-        payload = { data: scanDocs(DOCS_DIR, '', '') };
-    } else {
-        sendJson(res, 404, { error: 'unknown action: ' + action });
-        return;
-    }
-    sendJson(res, 200, payload);
+function publicPath(name) {
+    const parts = name.split('/');
+    if (parts.some(part => !part || /^[._]/.test(part) || /[\\:\x00]/.test(part))) return false;
+    if (['index.html', 'config.js', 'api/file/sidebar', 'api/file/search'].includes(name)) return true;
+    return parts.length > 1 && ['docs', 'assets'].includes(parts[0]) && Object.hasOwn(MIME, path.extname(name).toLowerCase());
 }
 
-/** 静态文件服务（根目录 = 项目根；目录回退到 index.html） */
-function serveStatic(res, pathname) {
-    let filePath = decodeURIComponent(pathname);
-    // 防路径穿越：归一化后必须仍在项目根内
-    filePath = path.normalize(path.join(ROOT_DIR, filePath));
-    if (!filePath.startsWith(ROOT_DIR + path.sep) && filePath !== ROOT_DIR) {
-        res.writeHead(403).end('Forbidden');
-        return;
+function serveStatic(req, res, name) {
+    if (!publicPath(name)) return sendJson(req, res, 404, { error: 'Not found' });
+    const parts = name.split('/');
+    let filePath = ROOT_DIR;
+    for (const part of parts) {
+        filePath = path.join(filePath, part);
+        if (fs.lstatSync(filePath).isSymbolicLink()) return sendJson(req, res, 404, { error: 'Not found' });
     }
-
-    let stat = null;
-    try { stat = fs.statSync(filePath); } catch (e) { /* not found */ }
-    if (stat && stat.isDirectory()) {
-        filePath = path.join(filePath, 'index.html');
-        try { stat = fs.statSync(filePath); } catch (e) { stat = null; }
-    }
-
-    if (!stat || !stat.isFile()) {
-        res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-        res.end('404 Not Found');
-        return;
-    }
-
-    const ext = path.extname(filePath).toLowerCase();
-    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-    fs.createReadStream(filePath).pipe(res);
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return sendJson(req, res, 404, { error: 'Not found' });
+    res.writeHead(200, {
+        'Content-Type': name.startsWith('api/file/') ? 'application/json; charset=utf-8' : MIME[path.extname(name).toLowerCase()],
+        'Content-Length': stat.size
+    });
+    if (req.method === 'HEAD') return res.end();
+    fs.createReadStream(filePath).on('error', () => res.destroy()).pipe(res);
 }
 
 const server = http.createServer((req, res) => {
-    // 统一 CORS，便于前端跨域联调
     res.setHeader('Access-Control-Allow-Origin', '*');
-
-    const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-
-    // 路由解析（优先级：?action= 查询参数 > /sidebar|/search 路径 > 静态文件）
-    const queryAction = url.searchParams.get('action');
-    if (queryAction) {
-        sendAction(res, queryAction);
-        return;
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    if (!['GET', 'HEAD'].includes(req.method)) {
+        res.setHeader('Allow', 'GET, HEAD');
+        return sendJson(req, res, 405, { error: 'Method not allowed' });
     }
-
-    const route = url.pathname.replace(/^\/+|\/+$/g, '');
-    if (route === 'sidebar' || route === 'search') {
-        sendAction(res, route);
-        return;
+    try {
+        const url = new URL(req.url, 'http://localhost');
+        const name = decodeURIComponent(url.pathname).replace(/^\//, '') || 'index.html';
+        let action = ['sidebar', 'search'].includes(name) ? name : '';
+        if (/^api\/php\/(sidebar|search)$/.test(name)) action = name.split('/').pop();
+        if (['index.html', 'api/php', 'api/php/', 'api/php/index.php'].includes(name)) action = url.searchParams.get('action') || action;
+        if (action) {
+            if (!['sidebar', 'search'].includes(action)) return sendJson(req, res, 404, { error: 'Unknown action' });
+            const tree = scanDocs();
+            return sendJson(req, res, 200, action === 'sidebar' ? { data: tree } : buildSearchIndex(tree));
+        }
+        serveStatic(req, res, name);
+    } catch (error) {
+        if (res.headersSent) return res.destroy();
+        const code = error instanceof URIError ? 400 : ['ENOENT', 'ENOTDIR'].includes(error.code) ? 404 : 500;
+        if (code === 500) console.error(error.message);
+        sendJson(req, res, code, { error: code === 500 ? 'Cannot build document index; check server log' : 'Invalid path or file not found' });
     }
-
-    serveStatic(res, url.pathname);
 });
 
-server.listen(PORT, HOST, () => {
-    console.log(`FastMD Node.js backend listening at http://${HOST}:${PORT}/`);
-    console.log(`docs dir: ${DOCS_DIR}`);
-    console.log('API routes: /sidebar, /search (legacy: ?action=...)');
-});
+server.listen(PORT, HOST, () => console.log(`FastMD: http://${HOST}:${PORT}/`));
