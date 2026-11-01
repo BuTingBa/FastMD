@@ -180,16 +180,18 @@ func run() error {
 		fmt.Println("FastMD " + version)
 		return nil
 	}
-	flags := flag.NewFlagSet("fastmd [serve|build|version]", flag.ContinueOnError)
+	flags := flag.NewFlagSet("fastmd [serve|build|pages|version]", flag.ContinueOnError)
 	rootFlag := flags.String("root", filepath.Dir(exe), "site directory (default: beside executable)")
+	outputFlag := flags.String("output", "_site", "pages output directory name under the site root (must not exist)")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
 	}
-	if flags.NArg() != 0 || (command != "build" && command != "serve") {
-		return errors.New("usage: fastmd [serve|build|version] [-root site-directory]")
+	isBuildCommand := command == "build" || command == "pages"
+	if flags.NArg() != 0 || (!isBuildCommand && command != "serve") {
+		return errors.New("usage: fastmd [serve|build|pages|version] [-root site-directory] [-output _site]")
 	}
 	root, err := filepath.Abs(*rootFlag)
 	if err != nil {
@@ -200,6 +202,9 @@ func run() error {
 	}
 	if command == "build" {
 		return buildIndex(root)
+	}
+	if command == "pages" {
+		return exportPages(root, *outputFlag)
 	}
 	cfg, err := readConfig(root)
 	if err != nil {

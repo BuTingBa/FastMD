@@ -37,6 +37,12 @@ chmod +x fastmd-linux
 
 纯静态托管时将 `config.js` 的 `apiEndpoint` 改成 `api/file`，上传页面、资源、文档和索引即可。现有 PHP 模式无需调整；独立服务兼容默认 `api/php` 地址。
 
+## 导出静态站点
+
+运行 `fastmd-windows.exe pages` 或 `./fastmd-linux pages`，生成可直接上传的 `_site/`，并立即退出。输出自动使用静态索引接口，不修改源配置。输出目录必须不存在，可用 `-output 新目录名` 更换。
+
+GitHub Pages 的自动发布与首次启用步骤见 [GitHub Pages](#/pages)。
+
 ## 服务配置
 
 ```json
@@ -67,8 +73,8 @@ Markdown 原生 HTML 保留，文档应由可信维护者编写。搜索摘要�
 
 ```bash
 go test ./...
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=v1.7.0.202610291330" -o ../../fastmd-linux .
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=v1.7.0.202610291330" -o ../../fastmd-windows.exe .
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=v1.8.0.202611011511" -o ../../fastmd-linux .
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=v1.8.0.202611011511" -o ../../fastmd-windows.exe .
 ```
 
 PowerShell 用 `$env:CGO_ENABLED='0'`、`$env:GOOS='windows'`、`$env:GOARCH='amd64'` 设置环境变量，再执行相同 `go build` 命令。ARM64 主机需将 `GOARCH` 改为 `arm64` 后自行编译；仓库附带 x64 文件。

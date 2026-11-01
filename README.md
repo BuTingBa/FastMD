@@ -1,5 +1,20 @@
 # Fast MD 轻量级文档渲染系统
 
+## GitHub Pages：推送后自动发布
+
+仓库已提供 `.github/workflows/pages.yml`。在 GitHub 仓库 **Settings → Pages → Build and deployment → Source** 选择 **GitHub Actions**，之后每次推送到 `main` 都会自动测试、生成索引并发布，无需自己的服务器。
+
+- 本仓库站点：<https://butingba.github.io/FastMD/>
+- 更新文档：修改 `docs/` 后提交并推送 `main`，在 **Actions → Deploy GitHub Pages** 查看部署结果。
+- 首次启用或需要重发：在同一工作流点击 **Run workflow**，选择 `main`。
+- Fork 后同样启用 Pages，并手动运行一次工作流；地址以自己仓库的 Pages 设置为准。默认分支不是 `main` 时，修改工作流的分支配置。
+
+构建复用 Go 索引逻辑，只发布 `_site/` 内的静态页面、资源、文档及索引。导出时自动使用 `api/file`，源配置无需修改；不需要 npm 安装、Jekyll、数据库或额外令牌。
+
+本地也可以导出：Windows 执行 `.\fastmd-windows.exe pages`，Linux 执行 `./fastmd-linux pages`，把生成的 `_site/` 上传到任意静态主机即可。输出目录必须不存在，重复导出前删除旧输出或用 `-output 新目录名` 指定新目录。
+
+详细步骤见 [GitHub Pages 部署](docs/GitHub%20Pages[pages][9].md)。
+
 ## 无需安装环境：直接运行
 
 根目录提供 **Windows x64**、**Linux x64** 独立程序，无需安装 Go、PHP、Node.js 或 Web 服务器。
